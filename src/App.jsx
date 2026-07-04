@@ -281,6 +281,7 @@ RUN A RESEARCH PASS: extract statements and tag them (pain, desire, belief, obje
       const researchPrompt =
 `You are a market research analyst doing an extraction pass, not writing the final avatar yet.
 ${context}
+${voiceLine()}${complianceLine()}
 
 ${researchTask}
 
@@ -298,6 +299,7 @@ Be thorough, you have room here. Use up to 5 items per array where you have real
 RESEARCH: ${JSON.stringify(research)}
 
 ${context}
+${voiceLine()}${complianceLine()}
 
 Reframe every field for THIS market, not generic infomarketing. The villain is a market force or system, never a person the reader loves. Relational impact means staff, partners, family in the business, reputation, and customers, framed honestly, not cruelly. No vanity or shock framing.
 
@@ -364,7 +366,7 @@ Return ONLY JSON: {"Pain":"","Promise":"","Proof":"","Constraints":"","Curiosity
     setBusy("recommend");
     try {
       const list = TEMPLATES.map((t) => `${t.id}. ${t.name} - ${t.when}`).join("\n");
-      const prompt = `Pick the single best ad template for this offer.\nOFFER: ${intake.offer}\nMARKET: ${intake.audience || "infer"}\n${blocks.Curiosity ? "ANGLE: " + blocks.Curiosity : ""}\nTEMPLATES:\n${list}\nReturn ONLY JSON: {"id": <number>, "reason": "<one sentence>"}`;
+      const prompt = `Pick the single best ad template for this offer.\nOFFER: ${intake.offer}\nMARKET: ${intake.audience || "infer"}\n${blocks.Curiosity ? "ANGLE: " + blocks.Curiosity : ""}\nTEMPLATES:\n${list}\n${voiceLine()}\nReturn ONLY JSON: {"id": <number>, "reason": "<one sentence>"}`;
       const out = await callClaude(prompt);
       const j = parseJSON(out);
       setRecommended({ id: j.id, reason: j.reason });

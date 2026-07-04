@@ -183,6 +183,45 @@ function repairJSON(t) {
   for (let i = stack.length - 1; i >= 0; i--) out += stack[i];
   return out;
 }
+// Fixes mid-document JSON slips that repairJSON does not target (that one only
+// closes off a truncated tail). The two common LLM failure modes here are a
+// literal newline inside a string, and an unescaped quote inside a quoted
+// phrase (easy to hit with verbatim customer quotes). This walks the text
+// tracking whether we are inside a string, escapes stray control characters,
+// and for a bare quote, looks ahead past whitespace: if the next real
+// character is a valid JSON continuation (, } ] or :), it really ends the
+// string; otherwise it is content and gets escaped instead.
+function sanitizeJSONText(t) {
+  let out = "";
+  let inStr = false;
+  for (let i = 0; i < t.length; i++) {
+    const c = t[i];
+    if (!inStr) {
+      out += c;
+      if (c === "\"") inStr = true;
+      continue;
+    }
+    if (c === "\\") {
+      out += c;
+      if (i + 1 < t.length) { out += t[i + 1]; i++; }
+      continue;
+    }
+    if (c === "\n") { out += "\\n"; continue; }
+    if (c === "\r") { continue; }
+    if (c === "\t") { out += "\\t"; continue; }
+    if (c === "\"") {
+      let j = i + 1;
+      while (j < t.length && /\s/.test(t[j])) j++;
+      const next = t[j];
+      const endsHere = next === undefined || next === "," || next === "}" || next === "]" || next === ":";
+      if (endsHere) { out += c; inStr = false; }
+      else { out += "\\\""; }
+      continue;
+    }
+    out += c;
+  }
+  return out;
+}
 function parseJSON(text) {
   let t = (text || "").trim().replace(/^```json/i, "").replace(/^```/, "").replace(/```$/, "").trim();
   const s = t.indexOf("{");
@@ -190,6 +229,7 @@ function parseJSON(text) {
     const e = t.lastIndexOf("}");
     t = e > s ? t.slice(s, e + 1) : t.slice(s);
   }
+  t = sanitizeJSONText(t);
   try { return JSON.parse(t); }
   catch (_) { return JSON.parse(repairJSON(t)); }
 }
@@ -285,7 +325,7 @@ ${voiceLine()}${complianceLine()}
 
 ${researchTask}
 
-Be thorough, you have room here. Use up to 5 items per array where you have real, specific material, fewer if you would be padding. Return ONLY JSON, no fences:
+Be thorough, you have room here. Use up to 5 items per array where you have real, specific material, fewer if you would be padding. Return ONLY valid JSON, no fences: escape any quote marks inside a string as \", and never put a literal line break inside a string value.
 {"confidence":"high|medium|low","coverageNote":"","painPoints":[{"text":"","type":"psychological|physiological|social|measurable","frequency":"high|medium|low","quote":"<=20 words or empty"}],"relationalImpact":[""],"desiredOutcomes":[""],"coreWound":"","fears":[""],"beliefs":[""],"constraints":{"Money":"","Time":"","Effort":""},"objections":[""],"priorSolutions":[{"tried":"","whyFailed":""}],"wontDo":[""],"villain":"","secondaryGain":"","proofTrusted":[""],"proofGaps":[""],"marketAngles":[{"angle":"","saturation":"high|medium|low"}],"voiceSamples":[""]}`;
       setAvatarStage("research");
       const researchOut = await callClaude(researchPrompt);
@@ -303,7 +343,7 @@ ${voiceLine()}${complianceLine()}
 
 Reframe every field for THIS market, not generic infomarketing. The villain is a market force or system, never a person the reader loves. Relational impact means staff, partners, family in the business, reputation, and customers, framed honestly, not cruelly. No vanity or shock framing.
 
-You have real room here: up to 4 items per array, and a phrase can run a full sentence when it earns its place. Do not pad or invent to fill space. Return ONLY JSON, no fences:
+You have real room here: up to 4 items per array, and a phrase can run a full sentence when it earns its place. Do not pad or invent to fill space. Return ONLY valid JSON, no fences: escape any quote marks inside a string as \", and never put a literal line break inside a string value.
 {"confidence":"high|medium|low","coverage":"one line on corpus vs inference","pains":[{"text":"","type":"psychological|physiological|social|measurable","frequency":"high|medium|low","quote":"<=20 words or empty"}],"relationalImpact":["how the problem shows up with staff, family, reputation, or customers"],"desire":"the promised land in one line","dreamOutcomes":["concrete, specific outcomes if it were fully solved"],"coreWound":"","fears":["deep, mostly unspoken fears"],"beliefs":[""],"constraints":{"Money":"","Time":"","Effort":""},"objections":[""],"triedBefore":[{"tried":"a prior solution they tried","whyFailed":"why it let them down"}],"wontDo":["what they refuse to do to fix it"],"villain":"the outside force they blame, a market force or system, not a person","secondaryGain":"what they quietly lose or give up by solving it","proofTrusted":[""],"proofGaps":[""],"marketAngles":[{"angle":"","saturation":"high|medium|low"}],"voice":[""]}`;
       setAvatarStage("build");
       const out = await callClaude(synthesisPrompt, 2400);

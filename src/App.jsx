@@ -233,6 +233,7 @@ function parseJSON(text) {
   try { return JSON.parse(t); }
   catch (_) { return JSON.parse(repairJSON(t)); }
 }
+const stripQuoteMarks = (s) => String(s || "").replace(/^[\s"'“”‘’]+/, "").replace(/[\s"'“”‘’]+$/, "");
 const wordCount = (s) => (s || "").trim().split(/\s+/).filter(Boolean).length;
 const initials = (s) => (s || "AD").trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase() || "AD";
 const cv = (segs) => Math.round((segs.length / (segs.reduce((a, s) => a + wordCount(s.text), 0) || 1)) * 100);
@@ -326,7 +327,7 @@ ${voiceLine()}${complianceLine()}
 ${researchTask}
 
 Be thorough, you have room here. Use up to 5 items per array where you have real, specific material, fewer if you would be padding. Return ONLY valid JSON, no fences: escape any quote marks inside a string as \", and never put a literal line break inside a string value.
-{"confidence":"high|medium|low","coverageNote":"","painPoints":[{"text":"","type":"psychological|physiological|social|measurable","frequency":"high|medium|low","quote":"<=20 words or empty"}],"relationalImpact":[""],"desiredOutcomes":[""],"coreWound":"","fears":[""],"beliefs":[""],"constraints":{"Money":"","Time":"","Effort":""},"objections":[""],"priorSolutions":[{"tried":"","whyFailed":""}],"wontDo":[""],"villain":"","secondaryGain":"","proofTrusted":[""],"proofGaps":[""],"marketAngles":[{"angle":"","saturation":"high|medium|low"}],"voiceSamples":[""]}`;
+{"confidence":"high|medium|low","coverageNote":"","painPoints":[{"text":"","type":"psychological|physiological|social|measurable","frequency":"high|medium|low","quote":"<=20 words or empty, the words only, no surrounding quote marks"}],"relationalImpact":[""],"desiredOutcomes":[""],"coreWound":"","fears":[""],"beliefs":[""],"constraints":{"Money":"","Time":"","Effort":""},"objections":[""],"priorSolutions":[{"tried":"","whyFailed":""}],"wontDo":[""],"villain":"","secondaryGain":"","proofTrusted":[""],"proofGaps":[""],"marketAngles":[{"angle":"","saturation":"high|medium|low"}],"voiceSamples":[""]}`;
       setAvatarStage("research");
       const researchOut = await callClaude(researchPrompt);
       const research = parseJSON(researchOut);
@@ -344,7 +345,7 @@ ${voiceLine()}${complianceLine()}
 Reframe every field for THIS market, not generic infomarketing. The villain is a market force or system, never a person the reader loves. Relational impact means staff, partners, family in the business, reputation, and customers, framed honestly, not cruelly. No vanity or shock framing.
 
 You have real room here: up to 4 items per array, and a phrase can run a full sentence when it earns its place. Do not pad or invent to fill space. Return ONLY valid JSON, no fences: escape any quote marks inside a string as \", and never put a literal line break inside a string value.
-{"confidence":"high|medium|low","coverage":"one line on corpus vs inference","pains":[{"text":"","type":"psychological|physiological|social|measurable","frequency":"high|medium|low","quote":"<=20 words or empty"}],"relationalImpact":["how the problem shows up with staff, family, reputation, or customers"],"desire":"the promised land in one line","dreamOutcomes":["concrete, specific outcomes if it were fully solved"],"coreWound":"","fears":["deep, mostly unspoken fears"],"beliefs":[""],"constraints":{"Money":"","Time":"","Effort":""},"objections":[""],"triedBefore":[{"tried":"a prior solution they tried","whyFailed":"why it let them down"}],"wontDo":["what they refuse to do to fix it"],"villain":"the outside force they blame, a market force or system, not a person","secondaryGain":"what they quietly lose or give up by solving it","proofTrusted":[""],"proofGaps":[""],"marketAngles":[{"angle":"","saturation":"high|medium|low"}],"voice":[""]}`;
+{"confidence":"high|medium|low","coverage":"one line on corpus vs inference","pains":[{"text":"","type":"psychological|physiological|social|measurable","frequency":"high|medium|low","quote":"<=20 words or empty, the words only, no surrounding quote marks"}],"relationalImpact":["how the problem shows up with staff, family, reputation, or customers"],"desire":"the promised land in one line","dreamOutcomes":["concrete, specific outcomes if it were fully solved"],"coreWound":"","fears":["deep, mostly unspoken fears"],"beliefs":[""],"constraints":{"Money":"","Time":"","Effort":""},"objections":[""],"triedBefore":[{"tried":"a prior solution they tried","whyFailed":"why it let them down"}],"wontDo":["what they refuse to do to fix it"],"villain":"the outside force they blame, a market force or system, not a person","secondaryGain":"what they quietly lose or give up by solving it","proofTrusted":[""],"proofGaps":[""],"marketAngles":[{"angle":"","saturation":"high|medium|low"}],"voice":[""]}`;
       setAvatarStage("build");
       const out = await callClaude(synthesisPrompt, 2400);
       setAvatar(parseJSON(out)); markDone("avatar"); scrollAvatar();
@@ -809,7 +810,7 @@ Return ONLY JSON, no fences:
                             {obj.frequency && <Chip text={obj.frequency + " freq"} color={FREQ[obj.frequency] || "#9a9aa0"} />}
                             {obj.type && <Chip text={obj.type} color="#6b6b70" />}
                           </div>
-                          {obj.quote ? <div style={{ fontSize: 12.5, color: BLOCKS.Pain.ink, fontStyle: "italic", marginTop: 3, paddingLeft: 8, borderLeft: `2px solid ${BLOCKS.Pain.color}` }}>“{obj.quote}”</div> : null}
+                          {obj.quote ? <div style={{ fontSize: 12.5, color: BLOCKS.Pain.ink, fontStyle: "italic", marginTop: 3, paddingLeft: 8, borderLeft: `2px solid ${BLOCKS.Pain.color}` }}>“{stripQuoteMarks(obj.quote)}”</div> : null}
                         </div>
                       );
                     })}

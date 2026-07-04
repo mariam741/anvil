@@ -2,6 +2,11 @@
 // Vercel serverless function. Holds the Anthropic key and relays one request.
 // The browser never sees the key.
 
+// Without this, Vercel kills the function on its own short default duration,
+// well before a large max_tokens completion (like the avatar synthesis call)
+// can finish. 60 is the max allowed on the Hobby plan without upgrading.
+export const maxDuration = 60;
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });

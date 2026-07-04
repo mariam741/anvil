@@ -127,7 +127,7 @@ const PRESETS = {
 // Posts to /api/generate instead of the Anthropic URL directly, and reads data.text.
 // Because /api is served from the same Vercel project as the app, there is no CORS or key in the browser.
 async function callClaude(prompt, maxTokens = 1500) {
-  const TIMEOUT_MS = 45000;
+  const TIMEOUT_MS = 70000; // stay above the server's 60s maxDuration so its own timeout, if any, surfaces first
   for (let attempt = 0; attempt < 2; attempt++) {
     let res;
     const controller = new AbortController();

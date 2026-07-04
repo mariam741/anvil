@@ -126,7 +126,7 @@ const PRESETS = {
 // callClaude (patched for our own backend)
 // Posts to /api/generate instead of the Anthropic URL directly, and reads data.text.
 // Because /api is served from the same Vercel project as the app, there is no CORS or key in the browser.
-async function callClaude(prompt) {
+async function callClaude(prompt, maxTokens = 1500) {
   const TIMEOUT_MS = 45000;
   for (let attempt = 0; attempt < 2; attempt++) {
     let res;
@@ -136,7 +136,7 @@ async function callClaude(prompt) {
       res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, max_tokens: 1500 }),
+        body: JSON.stringify({ prompt, max_tokens: maxTokens }),
         signal: controller.signal,
       });
     } catch (netErr) {
@@ -209,6 +209,7 @@ export default function App() {
   const [platform, setPlatform] = useState("Facebook");
   const [complianceAck, setComplianceAck] = useState(false);
   const [avatar, setAvatar] = useState(null);
+  const [avatarStage, setAvatarStage] = useState("");
   const [blocks, setBlocks] = useState({ Pain: "", Promise: "", Proof: "", Constraints: "", Curiosity: "", Conditions: "" });
   const [notes, setNotes] = useState({});
   const [templateId, setTemplateId] = useState("auto");
@@ -261,32 +262,52 @@ export default function App() {
     setBusy("avatar");
     try {
       const corpus = intake.corpus.slice(0, CORPUS_CAP);
-      const research = hasCorpus
-        ? `RAW MARKET LANGUAGE the seller pasted:
-"""
-${corpus}
-"""
-RUN A RESEARCH PASS first: extract statements and tag them (pain, desire, belief, objection, demanded-proof, existing-angle, quote); cluster and rank by frequency and emotional charge; classify pains (physiological, psychological, social stigma, measurable); flag angles already present and their saturation; attach a short verbatim quote (15 words max) to each pain when one exists, never invent quotes. Ground every field in the corpus. Confidence high if strongly supported, medium if partial, low if mostly inferred.`
-        : `No market language was pasted. Build the avatar from general knowledge of this exact market and from the answers given. Ground every field in what is common and widely shared among this audience, the pains, desires, and prior solutions that most members of this market actually have. Be specific to this vertical, not generic. Use "" for quotes since none were provided, and never invent quotes. Set confidence by how well understood this market is: use "medium" when it is a common, well documented vertical you know well, and use "low" only when it is narrow, niche, or you are mostly guessing. Do not use "high" without pasted market language. In coverage, say the avatar is built from general market knowledge and name the basis for the confidence level.`;
-      const prompt =
-`You are a market research strategist building a buyer avatar in the Anvil tradition.
-WHAT THEY SELL: ${intake.offer}
+      const context = `WHAT THEY SELL: ${intake.offer}
 WHO IT IS FOR: ${intake.audience || "(infer)"}
 STRUGGLE: ${intake.struggle || "(infer)"}
 DREAM: ${intake.dream || "(infer)"}
 HESITATION: ${intake.hesitation || "(infer)"}
-PROOF THEY HAVE: ${intake.proof || "(infer / note if thin)"}
+PROOF THEY HAVE: ${intake.proof || "(infer / note if thin)"}`;
 
-${research}
+      // Call 1: research pass. Its only job is to extract and structure raw findings,
+      // so it gets its own token budget instead of sharing one call with the synthesis below.
+      const researchTask = hasCorpus
+        ? `RAW MARKET LANGUAGE the seller pasted:
+"""
+${corpus}
+"""
+RUN A RESEARCH PASS: extract statements and tag them (pain, desire, belief, objection, demanded-proof, existing-angle, quote); cluster and rank by frequency and emotional charge; classify pains (physiological, psychological, social stigma, measurable); flag angles already present and their saturation; attach a short verbatim quote (20 words max) to each pain when one exists, never invent quotes. Ground every field in the corpus. Confidence high if strongly supported, medium if partial, low if mostly inferred.`
+        : `No market language was pasted. Build this research from general knowledge of this exact market and from the answers given. Ground every field in what is common and widely shared among this audience, the pains, desires, and prior solutions that most members of this market actually have. Be specific to this vertical, not generic. Use "" for quotes since none were provided, and never invent quotes. Set confidence by how well understood this market is: use "medium" for a common, well documented vertical, "low" only when it is narrow, niche, or mostly a guess. Never use "high" without pasted market language. In coverageNote, say this is built from general market knowledge and name the basis for the confidence level.`;
+      const researchPrompt =
+`You are a market research analyst doing an extraction pass, not writing the final avatar yet.
+${context}
+
+${researchTask}
+
+Be thorough, you have room here. Use up to 5 items per array where you have real, specific material, fewer if you would be padding. Return ONLY JSON, no fences:
+{"confidence":"high|medium|low","coverageNote":"","painPoints":[{"text":"","type":"psychological|physiological|social|measurable","frequency":"high|medium|low","quote":"<=20 words or empty"}],"relationalImpact":[""],"desiredOutcomes":[""],"coreWound":"","fears":[""],"beliefs":[""],"constraints":{"Money":"","Time":"","Effort":""},"objections":[""],"priorSolutions":[{"tried":"","whyFailed":""}],"wontDo":[""],"villain":"","secondaryGain":"","proofTrusted":[""],"proofGaps":[""],"marketAngles":[{"angle":"","saturation":"high|medium|low"}],"voiceSamples":[""]}`;
+      setAvatarStage("research");
+      const researchOut = await callClaude(researchPrompt);
+      const research = parseJSON(researchOut);
+
+      // Call 2: synthesis. Takes the structured research as input and writes the final
+      // avatar in the schema the rest of the app reads, with real room to go deeper
+      // than the old single-call version could afford.
+      const synthesisPrompt =
+`You are a market research strategist building a buyer avatar in the Anvil tradition, from this structured research pass:
+RESEARCH: ${JSON.stringify(research)}
+
+${context}
 
 Reframe every field for THIS market, not generic infomarketing. The villain is a market force or system, never a person the reader loves. Relational impact means staff, partners, family in the business, reputation, and customers, framed honestly, not cruelly. No vanity or shock framing.
 
-Keep arrays to 2 items maximum and every phrase under 12 words. Be terse so the JSON stays small. Return ONLY JSON, no fences:
-{"confidence":"high|medium|low","coverage":"one line on corpus vs inference","pains":[{"text":"","type":"psychological|physiological|social|measurable","frequency":"high|medium|low","quote":"<=15 words or empty"}],"relationalImpact":["how the problem shows up with staff, family, reputation, or customers"],"desire":"the promised land in one line","dreamOutcomes":["3 concrete, specific outcomes if it were fully solved"],"coreWound":"","fears":["1 or 2 deep, mostly unspoken fears"],"beliefs":[""],"constraints":{"Money":"","Time":"","Effort":""},"objections":[""],"triedBefore":[{"tried":"a prior solution they tried","whyFailed":"why it let them down"}],"wontDo":["what they refuse to do to fix it"],"villain":"the outside force they blame, a market force or system, not a person","secondaryGain":"what they quietly lose or give up by solving it","proofTrusted":[""],"proofGaps":[""],"marketAngles":[{"angle":"","saturation":"high|medium|low"}],"voice":[""]}`;
-      const out = await callClaude(prompt);
+You have real room here: up to 4 items per array, and a phrase can run a full sentence when it earns its place. Do not pad or invent to fill space. Return ONLY JSON, no fences:
+{"confidence":"high|medium|low","coverage":"one line on corpus vs inference","pains":[{"text":"","type":"psychological|physiological|social|measurable","frequency":"high|medium|low","quote":"<=20 words or empty"}],"relationalImpact":["how the problem shows up with staff, family, reputation, or customers"],"desire":"the promised land in one line","dreamOutcomes":["concrete, specific outcomes if it were fully solved"],"coreWound":"","fears":["deep, mostly unspoken fears"],"beliefs":[""],"constraints":{"Money":"","Time":"","Effort":""},"objections":[""],"triedBefore":[{"tried":"a prior solution they tried","whyFailed":"why it let them down"}],"wontDo":["what they refuse to do to fix it"],"villain":"the outside force they blame, a market force or system, not a person","secondaryGain":"what they quietly lose or give up by solving it","proofTrusted":[""],"proofGaps":[""],"marketAngles":[{"angle":"","saturation":"high|medium|low"}],"voice":[""]}`;
+      setAvatarStage("build");
+      const out = await callClaude(synthesisPrompt, 2400);
       setAvatar(parseJSON(out)); markDone("avatar"); scrollAvatar();
     } catch (e) { setError("Could not build the avatar. " + ((e && e.message) || "Unknown error") + ". Try again, or switch to Expert mode to skip the avatar."); }
-    finally { setBusy(""); }
+    finally { setBusy(""); setAvatarStage(""); }
   }
 
   async function buildBlocks() {
@@ -675,7 +696,7 @@ Return ONLY JSON, no fences:
                     <textarea style={{ ...field, minHeight: 100, fontFamily: "ui-monospace, Menlo, Consolas, monospace", fontSize: 12.5 }} value={intake.corpus} onChange={(e) => setIn("corpus", e.target.value)} placeholder={`"I've spent thousands and still have nothing to show for it."\n"I'm just not a tech person."`} />
                     <div style={{ fontSize: 11, color: corpusTrimmed ? "#7A0E12" : "#9a9aa0", marginTop: 4 }}>{intake.corpus.length.toLocaleString()} characters{corpusTrimmed ? ` · only the first ${CORPUS_CAP.toLocaleString()} read` : ""}</div>
                   </div>
-                  <button style={btnState("avatar", { ...btn, justifyContent: "center", width: "100%", padding: 12 })} onClick={buildAvatar} disabled={busy === "avatar"}>{busy === "avatar" ? <><Spinner /> {hasCorpus ? "Running research pass" : "Building your buyer"}</> : (hasCorpus ? "Run research pass + build avatar" : "Build my buyer avatar")}</button>
+                  <button style={btnState("avatar", { ...btn, justifyContent: "center", width: "100%", padding: 12 })} onClick={buildAvatar} disabled={busy === "avatar"}>{busy === "avatar" ? <><Spinner /> {avatarStage === "research" ? "Researching the market" : "Building your buyer"}</> : (hasCorpus ? "Run research pass + build avatar" : "Build my buyer avatar")}</button>
                 </>
               ) : (
                 <>

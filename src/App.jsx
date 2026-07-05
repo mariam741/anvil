@@ -281,17 +281,6 @@ const CONF = { high: { t: "High confidence", c: "#1B7A43", bg: "#E1F1E7" }, medi
 const FREQ = { high: "#E8242B", medium: "#9a7a0c", low: "#9a9aa0" };
 const Chip = ({ text, color }) => <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".03em", textTransform: "uppercase", color, border: `1px solid ${color}`, borderRadius: 999, padding: "1px 7px", whiteSpace: "nowrap" }}>{text}</span>;
 
-// Voice canon has banned the "it is not X, it is Y" construction, in one sentence or
-// split across two, for two rounds of prompt tightening now. The model keeps finding
-// a way around the wording of the instruction, always with the same fingerprint: a
-// clause ending in some form of "is not X" immediately followed by a clause or a new
-// sentence starting with "it is" or "that is". This is a fingerprint check, not a
-// prompt. It flags a match for a human to edit, it never silently strips or rewrites.
-const BANNED_CONSTRUCTION_RE = /\bis\s+not\b[^.!?]*[.,;]\s*(it|that)\s+is\b/i;
-const hasBannedConstruction = (s) => BANNED_CONSTRUCTION_RE.test(String(s || ""));
-const VoiceFlag = ({ text }) => hasBannedConstruction(text)
-  ? <div style={{ fontSize: 11, color: "#7A0E12", fontWeight: 700, marginTop: 2 }}>Flagged: this reads like the banned "is not X, it is Y" construction. Edit before using.</div>
-  : null;
 
 export default function App() {
   const [mode, setMode] = useState("guided");
@@ -1058,7 +1047,6 @@ Return ONLY JSON, no fences:
                     ) : (
                       <>
                         <div style={{ fontSize: 13, color: "#1f1f22", marginBottom: 6 }}>{p.proofText}</div>
-                        <VoiceFlag text={p.proofText} />
                         <button style={{ ...btnGhost, padding: "5px 10px", fontSize: 12 }} onClick={() => setBlock("Proof", p.proofText)}>Use in Proof block</button>
                       </>
                     )}
@@ -1089,7 +1077,6 @@ Return ONLY JSON, no fences:
                         <div><span style={{ fontWeight: 700 }}>Elaborate: </span>{c.elaborate}</div>
                       </div>
                     )}
-                    <VoiceFlag text={combined} />
                     <button style={{ ...btnGhost, padding: "5px 10px", fontSize: 12 }} onClick={() => setBlock("Constraints", combined)}>Use in Constraints block</button>
                   </div>
                 );
@@ -1109,7 +1096,6 @@ Return ONLY JSON, no fences:
                   <div key={i} style={{ borderTop: i > 0 ? "1px solid #f0f0f2" : "none", paddingTop: i > 0 ? 10 : 0, marginTop: i > 0 ? 10 : 0 }}>
                     <div style={{ marginBottom: 4 }}><Chip text={q ? q.label : a.quadrantId} color={BLOCKS.Curiosity.color} /></div>
                     <div style={{ fontSize: 13, color: "#1f1f22", marginBottom: 6 }}>{a.angle}</div>
-                    <VoiceFlag text={a.angle} />
                     {isYours && <button style={{ ...btnGhost, padding: "5px 10px", fontSize: 12 }} onClick={() => setBlock("Curiosity", a.angle)}>Use in Curiosity block</button>}
                   </div>
                 );
@@ -1121,7 +1107,6 @@ Return ONLY JSON, no fences:
                     <div key={i} style={{ marginBottom: 8 }}>
                       <div style={{ fontSize: 13, fontWeight: 700, color: "#1c1e21" }}>{c.name}</div>
                       <div style={{ fontSize: 12.5, color: "#6b6b70" }}>{c.description}</div>
-                      <VoiceFlag text={c.description} />
                     </div>
                   ))}
                 </div>
@@ -1210,7 +1195,6 @@ function RsaCard({ r }) {
   const pathStr = (r.paths || []).filter(Boolean).slice(0, 2).join("/");
   const title = (r.headlines || []).slice(0, 3).join(" | ");
   const desc = (r.descriptions || []).slice(0, 2).join(" ");
-  const flaggedRsa = [...(r.headlines || []).map((h, i) => [`Headline ${i + 1}`, h]), ...(r.descriptions || []).map((d, i) => [`Description ${i + 1}`, d])].filter(([, t]) => hasBannedConstruction(t));
   const lenRow = (text, max) => {
     const len = (text || "").length, over = len > max;
     return (
@@ -1232,7 +1216,6 @@ function RsaCard({ r }) {
         </div>
       </div>
       <div style={{ fontSize: 12, color: "#8E3B8E", fontWeight: 700, marginBottom: 12 }}>{r.objective}</div>
-      {flaggedRsa.length > 0 && <div style={{ fontSize: 11.5, color: "#7A0E12", fontWeight: 700, marginBottom: 8 }}>Flagged, edit before using: {flaggedRsa.map(([k]) => k).join(", ")}. Reads like the banned "is not X, it is Y" construction.</div>}
 
       <div style={{ background: "#fff", border: "1px solid #ececef", borderRadius: 8, padding: 14, marginBottom: 4 }}>
         <div style={{ fontSize: 12, color: "#202124", marginBottom: 2 }}>Sponsored</div>
@@ -1280,7 +1263,6 @@ function AdPreview({ r, nested }) {
   const isFeed = FEED.includes(r.platform);
   const plainText = r.primaryText.map((s) => s.text).join(" ");
   const copy = (txt) => { try { navigator.clipboard.writeText(txt); } catch (e) {} };
-  const flaggedAd = [["Primary text", plainText], ["Headline", r.headline], ["Description", r.description], ["Image headline", r.imageHeadline], ["Image subline", r.imageSubline], ...(r.hooks || []).map((h, i) => [`Hook ${i + 1}`, h])].filter(([, t]) => hasBannedConstruction(t));
   const allFields = `PRIMARY TEXT:\n${plainText}\n\nHEADLINE: ${r.headline}\nDESCRIPTION: ${r.description}\nCTA: ${r.cta}\nIMAGE: ${r.imageHeadline} / ${r.imageSubline}`;
   const ctl = { fontFamily: "inherit", fontSize: 12, fontWeight: 600, padding: "6px 10px", borderRadius: 7, border: "1px solid #d4d4d8", background: "#fff", color: "#141414", cursor: "pointer" };
   const Zone = ({ n, label }) => anatomy ? (
@@ -1325,7 +1307,6 @@ function AdPreview({ r, nested }) {
           {r.note && <span style={{ fontSize: 12.5, color: "#6b6b70" }}>{r.note}</span>}
         </div>
       )}
-      {flaggedAd.length > 0 && <div style={{ fontSize: 11.5, color: "#7A0E12", fontWeight: 700, marginBottom: 8 }}>Flagged, edit before using: {flaggedAd.map(([k]) => k).join(", ")}. Reads like the banned "is not X, it is Y" construction.</div>}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
         <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "#9a9aa0" }}>{r.platform}{r.template ? " · " + r.template.name : ""}{r.objective ? " · " + (r.objective === "Lead generation" ? "Lead gen" : "Sale") : ""}</div>
         <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>

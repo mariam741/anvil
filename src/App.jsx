@@ -51,15 +51,15 @@ const OBJECTIVES = ["Lead generation", "Direct sale"];
 const VOICES = {
   "Plain & credible": {
     tag: "local SMBs, trust markets",
-    rule: "VOICE: plain, calm, and credible. Write at a fifth-grade reading level in short declarative sentences. Be concrete and specific. Lead with proof, time saved, and money or leads gained, not hype. No manufactured urgency or fake scarcity. No hype superlatives, clickbait, taboo, or shock framing. No em-dashes. Never use the 'it is not X, it is Y' construction. Keep Curiosity at a credible insight level (insight level about 5 to 7), never outlandish. Make no medical, legal, financial, or income claims you cannot substantiate. No Taboo Solution frames, no shock or taboo characterizations, and no idea caricatures.",
+    rule: "VOICE: plain, calm, and credible. Write at a fifth-grade reading level in short declarative sentences. Be concrete and specific. Lead with proof, time saved, and money or leads gained, not hype. No manufactured urgency or fake scarcity. No hype superlatives, clickbait, taboo, or shock framing. No em-dashes. Never use the 'it is not X, it is Y' construction, in one sentence or split across two, as in 'It is not X. It is Y.' Keep Curiosity at a credible insight level (insight level about 5 to 7), never outlandish. Make no medical, legal, financial, or income claims you cannot substantiate. No Taboo Solution frames, no shock or taboo characterizations, and no idea caricatures.",
   },
   "Ambitious & direct": {
     tag: "operators, agency builders",
-    rule: "VOICE: ambitious, direct, and credible, for an audience that is tired of gurus and burned by courses that never shipped. Energy is welcome, hype is not. No guru cliches (no 'six figures while you sleep', no 'secret loophole'). Every bold promise must be backed by specific proof. Favor real mechanics and specifics over spectacle. Keep Curiosity provable (insight level about 6 to 8). No em-dashes. No Taboo Solution frames or shock characterizations.",
+    rule: "VOICE: ambitious, direct, and credible, for an audience that is tired of gurus and burned by courses that never shipped. Energy is welcome, hype is not. No guru cliches (no 'six figures while you sleep', no 'secret loophole'). Every bold promise must be backed by specific proof. Favor real mechanics and specifics over spectacle. Keep Curiosity provable (insight level about 6 to 8). No em-dashes. Never use the 'it is not X, it is Y' construction, in one sentence or split across two. No Taboo Solution frames or shock characterizations.",
   },
   "Raw direct-response": {
     tag: "supplements, info, not local",
-    rule: "VOICE: classic aggressive direct-response, high curiosity and bold promises (insight level 6 to 9). Use only where the market expects it. Not appropriate for local services, health, legal, or finance.",
+    rule: "VOICE: classic aggressive direct-response, high curiosity and bold promises (insight level 6 to 9). No em-dashes. Never use the 'it is not X, it is Y' construction, in one sentence or split across two. Use only where the market expects it. Not appropriate for local services, health, legal, or finance.",
   },
 };
 const AXES = ["Hook", "Headline", "Image headline", "CTA", "Angle (big idea)"];

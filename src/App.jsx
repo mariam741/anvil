@@ -295,6 +295,9 @@ export default function App() {
   const [constraintDissolve, setConstraintDissolve] = useState([]);
   const [curiosityAngles, setCuriosityAngles] = useState([]);
   const [characterizations, setCharacterizations] = useState([]);
+  const [intuitionPumps, setIntuitionPumps] = useState([]);
+  const [evocativeNames, setEvocativeNames] = useState([]);
+  const [antiConstraintNames, setAntiConstraintNames] = useState([]);
   const [templateId, setTemplateId] = useState("auto");
   const [recommended, setRecommended] = useState(null);
   const [testAxis, setTestAxis] = useState("Hook");
@@ -549,6 +552,53 @@ Return ONLY valid JSON, no fences: escape any quote marks inside a string as \",
       setCharacterizations(Array.isArray(j.characterizations) ? j.characterizations.slice(0, 2) : []);
       markDone("curiosity");
     } catch (e) { setError("Could not build curiosity angles. " + ((e && e.message) || "Unknown error") + ". Try again, or fill the Curiosity block by hand."); }
+    finally { setBusy(""); }
+  }
+
+  async function buildNamingAndMetaphor() {
+    setError("");
+    const dreamOutcomes = avatar && Array.isArray(avatar.dreamOutcomes) ? avatar.dreamOutcomes.join(" | ") : "";
+    const hasMaterial = blocks.Promise.trim() || dreamOutcomes || intake.dream.trim() || characterizations.length > 0;
+    if (!hasMaterial) { setError("Fill in the Promise block or the dream field first, or run the curiosity angles above. Naming needs a real mechanism to name."); return; }
+    setBusy("naming");
+    try {
+      const material = `PROMISE: ${blocks.Promise || intake.dream || "(infer)"}
+DREAM OUTCOME(S): ${dreamOutcomes || "(infer)"}`;
+      const existingNames = characterizations.length > 0 ? `MECHANISM NAMES ALREADY IN USE (do not repeat, build on the same real mechanism instead): ${JSON.stringify(characterizations.map((c) => c.name))}` : "";
+      const objectionsSource = constraintDissolve.length > 0 ? constraintDissolve.map((c) => c.objection) : (intake.hesitation ? [intake.hesitation] : []);
+      const objectionsText = objectionsSource.length > 0 ? `REAL OBJECTIONS TO ANSWER (use only these, do not invent new ones): ${JSON.stringify(objectionsSource)}` : "";
+      const prompt =
+`You are a direct-response strategist naming the mechanism behind this offer and finding metaphors that make it concrete, in the Anvil framework.
+OFFER: ${intake.offer}
+${material}
+${existingNames}
+${objectionsText}
+${voiceLine()}${complianceLine()}
+
+Write 4 intuition pumps, one metaphor from each of these 4 categories, matched to how this specific audience already thinks about their own world, not generic:
+- natural: draws on something from nature or the body
+- mechanical: draws on a machine, system, or process
+- force: draws on physical force, pressure, momentum, or resistance
+- association: draws on a familiar, unrelated everyday concept the audience already understands
+
+Then write 3 names for the real mechanism above, at three different levels of how much each one reveals:
+- descriptive: says plainly what it does, no mystery
+- evocative: hints at the benefit or mechanism without spelling it out fully
+- abstract: a short, memorable name that reveals little on its own and needs the ad copy around it to explain it
+
+Then, only if real objections were given above, write up to 2 names that bake an objection's answer directly into the name itself, so the name defuses the objection before anyone has to argue with it. Skip this if no real objections were given, do not invent one.
+
+Do not use a Taboo Solution frame, a shock or taboo characterization, or an idea caricature, in any of the above, regardless of voice. Nothing should be gimmicky, cute at the expense of clarity, or drift into a health, legal, or financial claim.
+
+Return ONLY valid JSON, no fences: escape any quote marks inside a string as \", and never put a literal line break inside a string value.
+{"intuitionPumps":[{"type":"natural|mechanical|force|association","metaphor":"one to two sentences"}],"evocativeNames":[{"level":"descriptive|evocative|abstract","name":"the name"}],"antiConstraintNames":[{"objection":"the objection answered","name":"the name"}]}`;
+      const out = await callClaude(prompt, 1800);
+      const j = parseJSON(out);
+      setIntuitionPumps(Array.isArray(j.intuitionPumps) ? j.intuitionPumps.slice(0, 4) : []);
+      setEvocativeNames(Array.isArray(j.evocativeNames) ? j.evocativeNames.slice(0, 3) : []);
+      setAntiConstraintNames(Array.isArray(j.antiConstraintNames) ? j.antiConstraintNames.slice(0, 2) : []);
+      markDone("naming");
+    } catch (e) { setError("Could not build naming and metaphor. " + ((e && e.message) || "Unknown error") + ". Try again, or name it by hand."); }
     finally { setBusy(""); }
   }
 
@@ -1107,6 +1157,50 @@ Return ONLY JSON, no fences:
                     <div key={i} style={{ marginBottom: 8 }}>
                       <div style={{ fontSize: 13, fontWeight: 700, color: "#1c1e21" }}>{c.name}</div>
                       <div style={{ fontSize: 12.5, color: "#6b6b70" }}>{c.description}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            <section style={card}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
+                <h2 style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>Naming and metaphor</h2>
+                <button style={btnState("naming", { ...btnGhost, padding: "6px 10px", fontSize: 12 })} onClick={buildNamingAndMetaphor} disabled={busy === "naming"}>{busy === "naming" ? <><Spinner /> Naming it</> : "Find names and metaphors"}</button>
+              </div>
+              <p style={{ margin: "0 0 12px", fontSize: 12.5, color: "#6b6b70" }}>Metaphors that make the mechanism concrete, names at three levels of how much they reveal, and names that answer a real objection on their own.</p>
+              {intuitionPumps.length > 0 && (
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 700, color: "#3a3a3e", marginBottom: 6 }}>Metaphors</div>
+                  {intuitionPumps.map((m, i) => (
+                    <div key={i} style={{ marginBottom: 8 }}>
+                      <Chip text={m.type} color={BLOCKS.Curiosity.color} />
+                      <div style={{ fontSize: 13, color: "#1f1f22", marginTop: 3 }}>{m.metaphor}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {evocativeNames.length > 0 && (
+                <div style={{ marginBottom: 14, borderTop: "1px solid #f0f0f2", paddingTop: 12 }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 700, color: "#3a3a3e", marginBottom: 6 }}>Names, by how much they reveal</div>
+                  {evocativeNames.map((n, i) => (
+                    <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                      <div><Chip text={n.level} color={BLOCKS.Curiosity.color} /> <span style={{ fontSize: 13, fontWeight: 700, color: "#1c1e21", marginLeft: 6 }}>{n.name}</span></div>
+                      <button style={{ ...btnGhost, padding: "4px 9px", fontSize: 11.5 }} onClick={() => { try { navigator.clipboard.writeText(n.name); } catch (e) {} }}>Copy</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {antiConstraintNames.length > 0 && (
+                <div style={{ borderTop: "1px solid #f0f0f2", paddingTop: 12 }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 700, color: "#3a3a3e", marginBottom: 6 }}>Names that answer an objection</div>
+                  {antiConstraintNames.map((n, i) => (
+                    <div key={i} style={{ marginBottom: 8 }}>
+                      <div style={{ fontSize: 11.5, color: "#9a9aa0", fontStyle: "italic", marginBottom: 2 }}>Answers: {n.objection}</div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: "#1c1e21" }}>{n.name}</span>
+                        <button style={{ ...btnGhost, padding: "4px 9px", fontSize: 11.5 }} onClick={() => { try { navigator.clipboard.writeText(n.name); } catch (e) {} }}>Copy</button>
+                      </div>
                     </div>
                   ))}
                 </div>

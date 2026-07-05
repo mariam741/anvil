@@ -91,6 +91,15 @@ const PROOF_TYPES = [
   { id: "founder-story", category: "Psychological", name: "Founder story or origin credibility", desc: "The person behind the offer has lived the problem firsthand.", strength: 2, underused: true },
   { id: "scarcity-signal", category: "Psychological", name: "Scarcity-backed proof", desc: "Limited availability that reflects real demand, not manufactured urgency.", strength: 1, underused: true },
 ];
+// Curiosity Quadrant: two axes, market view vs your view, and problem vs solution.
+// The "your view" cells are what actually create curiosity, since curiosity is the
+// gap between what the market already believes and what you see instead.
+const CURIOSITY_QUADRANTS = [
+  { id: "market_problem", label: "What people already believe, about the problem" },
+  { id: "market_solution", label: "What people already believe, about the solution" },
+  { id: "your_problem", label: "What you see differently, about the problem" },
+  { id: "your_solution", label: "What you see differently, about the solution" },
+];
 const CORPUS_CAP = 6000;
 const HL_MAX = 30, DESC_MAX = 90, PATH_MAX = 15;
 
@@ -283,6 +292,8 @@ export default function App() {
   const [notes, setNotes] = useState({});
   const [proofPairing, setProofPairing] = useState([]);
   const [constraintDissolve, setConstraintDissolve] = useState([]);
+  const [curiosityAngles, setCuriosityAngles] = useState([]);
+  const [characterizations, setCharacterizations] = useState([]);
   const [templateId, setTemplateId] = useState("auto");
   const [recommended, setRecommended] = useState(null);
   const [testAxis, setTestAxis] = useState("Hook");
@@ -499,6 +510,44 @@ Return ONLY valid JSON, no fences: escape any quote marks inside a string as \",
       setConstraintDissolve(Array.isArray(j.constraints) ? j.constraints.slice(0, 4) : []);
       markDone("constraints");
     } catch (e) { setError("Could not build the dissolve. " + ((e && e.message) || "Unknown error") + ". Try again, or fill the Constraints block by hand."); }
+    finally { setBusy(""); }
+  }
+
+  async function buildCuriosityAngles() {
+    setError("");
+    const hasMaterial = (avatar && (avatar.marketAngles || avatar.pains || avatar.dreamOutcomes)) || blocks.Pain.trim() || blocks.Promise.trim() || intake.struggle.trim() || intake.dream.trim();
+    if (!hasMaterial) { setError("Fill in Pain or Promise, or the struggle and dream fields, or build the avatar first. Curiosity needs a real pain and promise to find the gap between."); return; }
+    setBusy("curiosity");
+    try {
+      const material = avatar
+        ? `MARKET ANGLES ALREADY IN USE (avoid these, they are saturated): ${JSON.stringify(avatar.marketAngles || [])}
+WHAT THEY HAVE TRIED BEFORE (and why it failed): ${JSON.stringify(avatar.triedBefore || [])}
+PAINS: ${JSON.stringify(avatar.pains || [])}
+DREAM OUTCOMES: ${JSON.stringify(avatar.dreamOutcomes || [])}`
+        : `PAIN: ${blocks.Pain || intake.struggle || "(infer)"}
+PROMISE: ${blocks.Promise || intake.dream || "(infer)"}`;
+      const quadrantList = CURIOSITY_QUADRANTS.map((q) => `${q.id}: ${q.label}`).join("\n");
+      const prompt =
+`You are a direct-response strategist finding curiosity angles, in the Anvil framework.
+OFFER: ${intake.offer}
+${material}
+${voiceLine()}${complianceLine()}
+
+Curiosity lives in the gap between what the market already believes and what you actually see. For each of these 4 fixed quadrants, using the id exactly as written, write one short angle:
+${quadrantList}
+
+The two "what people already believe" quadrants should sound like the common, saturated take, the thing every competitor already says. The two "what you see differently" quadrants are the actual differentiator, write a genuinely different, specific angle, not a rephrase of the common one, grounded in the pain and promise above, not invented from nothing. Avoid any angle that resembles what they have tried before or what is already saturated in the market angles list. Do not use a Taboo Solution frame, a shock or taboo characterization, or an idea caricature, in any quadrant, regardless of voice. Keep every angle something you could say to this client's face without flinching.
+
+Also name up to 2 characterizations: a plain, specific name for a mechanism or step in how the offer works, the kind of naming that makes a process feel concrete and ownable. Example of the right register: "same-day roof report," not a gimmick name and not a hype name.
+
+Return ONLY valid JSON, no fences: escape any quote marks inside a string as \", and never put a literal line break inside a string value.
+{"angles":[{"quadrantId":"one of the 4 ids above","angle":"the angle, one to two sentences"}],"characterizations":[{"name":"the short name","description":"one sentence on what it names and why it fits"}]}`;
+      const out = await callClaude(prompt, 1800);
+      const j = parseJSON(out);
+      setCuriosityAngles(Array.isArray(j.angles) ? j.angles.slice(0, 4) : []);
+      setCharacterizations(Array.isArray(j.characterizations) ? j.characterizations.slice(0, 2) : []);
+      markDone("curiosity");
+    } catch (e) { setError("Could not build curiosity angles. " + ((e && e.message) || "Unknown error") + ". Try again, or fill the Curiosity block by hand."); }
     finally { setBusy(""); }
   }
 
@@ -1031,6 +1080,36 @@ Return ONLY JSON, no fences:
                   </div>
                 );
               })}
+            </section>
+
+            <section style={card}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
+                <h2 style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>Curiosity angles</h2>
+                <button style={btnState("curiosity", { ...btnGhost, padding: "6px 10px", fontSize: 12 })} onClick={buildCuriosityAngles} disabled={busy === "curiosity"}>{busy === "curiosity" ? <><Spinner /> Finding the gap</> : "Find curiosity angles"}</button>
+              </div>
+              <p style={{ margin: "0 0 12px", fontSize: 12.5, color: "#6b6b70" }}>Curiosity is the gap between what the market already believes and what you actually see. The last two angles below are the ones worth using, the first two are the saturated take, shown so you can see the gap.</p>
+              {curiosityAngles.length > 0 && curiosityAngles.map((a, i) => {
+                const q = CURIOSITY_QUADRANTS.find((x) => x.id === a.quadrantId);
+                const isYours = a.quadrantId === "your_problem" || a.quadrantId === "your_solution";
+                return (
+                  <div key={i} style={{ borderTop: i > 0 ? "1px solid #f0f0f2" : "none", paddingTop: i > 0 ? 10 : 0, marginTop: i > 0 ? 10 : 0 }}>
+                    <div style={{ marginBottom: 4 }}><Chip text={q ? q.label : a.quadrantId} color={BLOCKS.Curiosity.color} /></div>
+                    <div style={{ fontSize: 13, color: "#1f1f22", marginBottom: 6 }}>{a.angle}</div>
+                    {isYours && <button style={{ ...btnGhost, padding: "5px 10px", fontSize: 12 }} onClick={() => setBlock("Curiosity", a.angle)}>Use in Curiosity block</button>}
+                  </div>
+                );
+              })}
+              {characterizations.length > 0 && (
+                <div style={{ marginTop: 14, borderTop: "1px solid #f0f0f2", paddingTop: 12 }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 700, color: "#3a3a3e", marginBottom: 6 }}>Naming a mechanism</div>
+                  {characterizations.map((c, i) => (
+                    <div key={i} style={{ marginBottom: 8 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "#1c1e21" }}>{c.name}</div>
+                      <div style={{ fontSize: 12.5, color: "#6b6b70" }}>{c.description}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </section>
 
             <section style={card}>

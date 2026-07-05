@@ -282,6 +282,7 @@ export default function App() {
   const [blocks, setBlocks] = useState({ Pain: "", Promise: "", Proof: "", Constraints: "", Curiosity: "", Conditions: "" });
   const [notes, setNotes] = useState({});
   const [proofPairing, setProofPairing] = useState([]);
+  const [constraintDissolve, setConstraintDissolve] = useState([]);
   const [templateId, setTemplateId] = useState("auto");
   const [recommended, setRecommended] = useState(null);
   const [testAxis, setTestAxis] = useState("Hook");
@@ -462,6 +463,42 @@ Return ONLY valid JSON, no fences: escape any quote marks inside a string as \",
       setProofPairing(Array.isArray(j.pairings) ? j.pairings.slice(0, 4) : []);
       markDone("proof");
     } catch (e) { setError("Could not build proof pairing. " + ((e && e.message) || "Unknown error") + ". Try again, or fill the Proof block by hand."); }
+    finally { setBusy(""); }
+  }
+
+  async function buildConstraintsDissolve() {
+    setError("");
+    const hasMaterial = (avatar && (avatar.objections || avatar.beliefs)) || intake.hesitation.trim();
+    if (!hasMaterial) { setError("Add a hesitation or build the avatar first. Dissolving a constraint needs a real objection to work from."); return; }
+    setBusy("constraints");
+    try {
+      const material = avatar
+        ? `OBJECTIONS: ${JSON.stringify(avatar.objections || [])}
+BELIEFS: ${JSON.stringify(avatar.beliefs || [])}
+TRIED BEFORE (and why it failed): ${JSON.stringify(avatar.triedBefore || [])}
+THE 3 CONSTRAINTS: ${JSON.stringify(avatar.constraints || {})}`
+        : `HESITATION: ${intake.hesitation || "(infer)"}`;
+      const prompt =
+`You are a persuasion strategist dissolving objections, in the Anvil framework.
+OFFER: ${intake.offer}
+${material}
+${voiceLine()}${complianceLine()}
+
+For 2 to 4 real objections or beliefs above, do not invent new ones, classify each on this hierarchy:
+- Experience: a specific bad experience or a missing fact. Dissolve it directly.
+- Belief: a generalized rule they have concluded from experience. Dissolve it with an acknowledge, a wedge, and an elaboration.
+- Value: something they hold as personally important, not just a factual belief. Never argue with it, side-step by showing the offer serves the value instead of fighting it.
+- Identity: tied to who they are or how they see themselves. Never challenge it directly, side-step by framing the offer as consistent with that identity, not a threat to it.
+
+For an Experience or Belief level objection, write a dissolve in three short parts: acknowledge the objection as reasonable, wedge in a distinction or a real counterexample showing it does not universally apply, then elaborate on why that changes things for this specific offer. For a Value or Identity level objection, write a single sidestep line that reframes the offer as compatible with what they value or who they are. It must never read as a rebuttal or as arguing with the person.
+
+Return ONLY valid JSON, no fences: escape any quote marks inside a string as \", and never put a literal line break inside a string value.
+{"constraints":[{"objection":"the real objection or belief, in their words","level":"Experience|Belief|Value|Identity","strategy":"dissolve|sidestep","acknowledge":"","wedge":"","elaborate":"","sidestep":""}]}`;
+      const out = await callClaude(prompt, 1800);
+      const j = parseJSON(out);
+      setConstraintDissolve(Array.isArray(j.constraints) ? j.constraints.slice(0, 4) : []);
+      markDone("constraints");
+    } catch (e) { setError("Could not build the dissolve. " + ((e && e.message) || "Unknown error") + ". Try again, or fill the Constraints block by hand."); }
     finally { setBusy(""); }
   }
 
@@ -963,6 +1000,34 @@ Return ONLY JSON, no fences:
                         <button style={{ ...btnGhost, padding: "5px 10px", fontSize: 12 }} onClick={() => setBlock("Proof", p.proofText)}>Use in Proof block</button>
                       </>
                     )}
+                  </div>
+                );
+              })}
+            </section>
+
+            <section style={card}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
+                <h2 style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>Constraints dissolve</h2>
+                <button style={btnState("constraints", { ...btnGhost, padding: "6px 10px", fontSize: 12 })} onClick={buildConstraintsDissolve} disabled={busy === "constraints"}>{busy === "constraints" ? <><Spinner /> Working it</> : "Dissolve an objection"}</button>
+              </div>
+              <p style={{ margin: "0 0 12px", fontSize: 12.5, color: "#6b6b70" }}>Classifies real objections and beliefs, then either dissolves them or side-steps them. Value and identity objections are never argued with, only reframed.</p>
+              {constraintDissolve.length > 0 && constraintDissolve.map((c, i) => {
+                const isSidestep = c.strategy === "sidestep" || c.level === "Value" || c.level === "Identity";
+                const combined = isSidestep ? c.sidestep : [c.acknowledge, c.wedge, c.elaborate].filter(Boolean).join(" ");
+                return (
+                  <div key={i} style={{ borderTop: i > 0 ? "1px solid #f0f0f2" : "none", paddingTop: i > 0 ? 10 : 0, marginTop: i > 0 ? 10 : 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#1c1e21", marginBottom: 3 }}>{c.objection}</div>
+                    <div style={{ marginBottom: 4 }}><Chip text={`${c.level} · ${isSidestep ? "side-step" : "dissolve"}`} color={BLOCKS.Constraints.color} /></div>
+                    {isSidestep ? (
+                      <div style={{ fontSize: 13, color: "#1f1f22", marginBottom: 6 }}>{c.sidestep}</div>
+                    ) : (
+                      <div style={{ fontSize: 13, color: "#1f1f22", marginBottom: 6, lineHeight: 1.5 }}>
+                        <div><span style={{ fontWeight: 700 }}>Acknowledge: </span>{c.acknowledge}</div>
+                        <div><span style={{ fontWeight: 700 }}>Wedge: </span>{c.wedge}</div>
+                        <div><span style={{ fontWeight: 700 }}>Elaborate: </span>{c.elaborate}</div>
+                      </div>
+                    )}
+                    <button style={{ ...btnGhost, padding: "5px 10px", fontSize: 12 }} onClick={() => setBlock("Constraints", combined)}>Use in Constraints block</button>
                   </div>
                 );
               })}

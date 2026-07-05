@@ -586,7 +586,7 @@ Then write 3 names for the real mechanism above, at three different levels of ho
 - evocative: hints at the benefit or mechanism without spelling it out fully
 - abstract: a short, memorable name that reveals little on its own and needs the ad copy around it to explain it
 
-Then, only if real objections were given above, write up to 2 names that bake an objection's answer directly into the name itself, so the name defuses the objection before anyone has to argue with it. Skip this if no real objections were given, do not invent one.
+Then, only if real objections were given above, write up to 2 names that bake an objection's answer directly into the name itself, so the name defuses the objection before anyone has to argue with it. The fact baked into the name must be something actually stated in the OFFER or PROMISE material above, a real price structure, a real guarantee, a real setup time, a real feature, never a pricing model, guarantee, or capability you are inventing to sound like a good answer. If nothing above actually answers a given objection, skip that objection rather than naming around an invented fact. It is fine to return fewer than 2, or none, if the material does not support it.
 
 Do not use a Taboo Solution frame, a shock or taboo characterization, or an idea caricature, in any of the above, regardless of voice. Nothing should be gimmicky, cute at the expense of clarity, or drift into a health, legal, or financial claim.
 

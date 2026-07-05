@@ -63,6 +63,34 @@ const VOICES = {
   },
 };
 const AXES = ["Hook", "Headline", "Image headline", "CTA", "Angle (big idea)"];
+
+// Proof engine: 22 proof types across 5 categories, ranked by how hard each is to
+// fake (harder to fake reads as stronger). Psychological types are flagged as
+// underused, per the framework, not weak, just rarely reached for.
+const PROOF_TYPES = [
+  { id: "live-demo", category: "Experiential", name: "Live demo", desc: "Let them see or hear it working right now, on a real example.", strength: 5 },
+  { id: "free-trial", category: "Experiential", name: "Free trial or sample", desc: "Let them experience the result themselves before paying.", strength: 4 },
+  { id: "money-back", category: "Experiential", name: "Money-back guarantee", desc: "Risk reversal that proves you believe in the result.", strength: 4 },
+  { id: "on-site-proof", category: "Experiential", name: "On-site or in-person proof", desc: "They can see it happening at their own location.", strength: 4 },
+  { id: "interactive-tool", category: "Experiential", name: "Interactive calculator or tool", desc: "They plug in their own numbers and see their own proof.", strength: 4 },
+  { id: "before-after", category: "Experiential", name: "Before-and-after", desc: "A visible change over time. Easy to cherry-pick, so it carries less weight than it looks like it should.", strength: 3 },
+  { id: "case-study", category: "Empirical", name: "Case study with numbers", desc: "One specific, documented result with real figures.", strength: 4 },
+  { id: "third-party-data", category: "Empirical", name: "Third-party study or data", desc: "A source outside the business backs the claim.", strength: 4 },
+  { id: "track-record", category: "Empirical", name: "Track record or volume stats", desc: "Years in business, number served, aggregate outcomes.", strength: 3 },
+  { id: "certification", category: "Credible", name: "Certification, license, or accreditation", desc: "A credential a regulator or board actually issues.", strength: 4 },
+  { id: "partnership", category: "Credible", name: "Partnership or official affiliation", desc: "Manufacturer-authorized, insurance-approved, or similar.", strength: 4 },
+  { id: "professional-credentials", category: "Credible", name: "Professional credentials of the person delivering it", desc: "Who is actually doing the work, and what they are qualified to do.", strength: 4 },
+  { id: "awards", category: "Credible", name: "Awards or industry recognition", desc: "Third-party recognition, not a self-issued badge.", strength: 3 },
+  { id: "media", category: "Credible", name: "Media mentions or press coverage", desc: "Independent coverage, not paid placement.", strength: 3 },
+  { id: "testimonials", category: "Social", name: "Testimonials or reviews", desc: "Star ratings and quoted reviews. Common and easy to discount, pair with something harder to fake for a big claim.", strength: 2 },
+  { id: "referral", category: "Social", name: "Referral or word-of-mouth signal", desc: "How new customers say they found you.", strength: 3 },
+  { id: "community", category: "Social", name: "Visible community or user base", desc: "Active reviews, visible activity, a real audience.", strength: 3 },
+  { id: "authority-transfer", category: "Psychological", name: "Authority transfer", desc: "An expert or credentialed figure vouches for it.", strength: 2, underused: true },
+  { id: "social-consensus", category: "Psychological", name: "Social proof or consensus", desc: "Enough other people are already doing this that it feels safe.", strength: 1, underused: true },
+  { id: "similarity-proof", category: "Psychological", name: "Similarity proof", desc: "Someone just like the reader got the result.", strength: 2, underused: true },
+  { id: "founder-story", category: "Psychological", name: "Founder story or origin credibility", desc: "The person behind the offer has lived the problem firsthand.", strength: 2, underused: true },
+  { id: "scarcity-signal", category: "Psychological", name: "Scarcity-backed proof", desc: "Limited availability that reflects real demand, not manufactured urgency.", strength: 1, underused: true },
+];
 const CORPUS_CAP = 6000;
 const HL_MAX = 30, DESC_MAX = 90, PATH_MAX = 15;
 
@@ -253,6 +281,7 @@ export default function App() {
   const [avatarStage, setAvatarStage] = useState("");
   const [blocks, setBlocks] = useState({ Pain: "", Promise: "", Proof: "", Constraints: "", Curiosity: "", Conditions: "" });
   const [notes, setNotes] = useState({});
+  const [proofPairing, setProofPairing] = useState([]);
   const [templateId, setTemplateId] = useState("auto");
   const [recommended, setRecommended] = useState(null);
   const [testAxis, setTestAxis] = useState("Hook");
@@ -398,6 +427,41 @@ Return ONLY JSON: {"Pain":"","Promise":"","Proof":"","Constraints":"","Curiosity
       setBlocks({ Pain: j.Pain || "", Promise: j.Promise || "", Proof: j.Proof || "", Constraints: j.Constraints || "", Curiosity: j.Curiosity || "", Conditions: j.Conditions || "" });
       markDone("blocks");
     } catch (e) { setError("Could not draft. " + ((e && e.message) || "Unknown error") + ". Fill the blocks by hand or try again."); }
+    finally { setBusy(""); }
+  }
+
+  async function buildProofPairing() {
+    setError("");
+    const dreamOutcomes = avatar && Array.isArray(avatar.dreamOutcomes) ? avatar.dreamOutcomes.join(" | ") : "";
+    if (!blocks.Promise.trim() && !dreamOutcomes && !intake.dream.trim()) { setError("Fill in the Promise block, or the dream field, first. Proof needs a claim to back."); return; }
+    setBusy("proof");
+    try {
+      const claimsContext = `PROMISE BLOCK: ${blocks.Promise || "(not filled)"}
+DREAM OUTCOME(S): ${dreamOutcomes || intake.dream || "(infer)"}`;
+      const proofOnHand = avatar
+        ? `PROOF THE MARKET TRUSTS (you have): ${JSON.stringify(avatar.proofTrusted || [])}
+PROOF GAPS: ${JSON.stringify(avatar.proofGaps || [])}`
+        : `PROOF THEY HAVE: ${intake.proof || "(thin or unspecified)"}`;
+      const typesList = PROOF_TYPES.map((p) => `${p.id}: ${p.name} [${p.category}, hard-to-fake ${p.strength}/5${p.underused ? ", underused" : ""}] - ${p.desc}`).join("\n");
+      const prompt =
+`You are a direct-response strategist pairing proof to claims, in the Anvil framework.
+OFFER: ${intake.offer}
+${claimsContext}
+${proofOnHand}
+${voiceLine()}${complianceLine()}
+
+Identify 2 to 4 specific claims or promises being made, pulled from the Promise block and dream outcomes above, do not invent new claims. For each claim, pick the single best-fitting proof type from this closed list, using the id exactly as written:
+${typesList}
+
+Rules: match proof strength to the size of the claim; a bold or specific promise needs a harder-to-fake proof type when one is available, a modest claim can use a lighter one. Only draft proofText from what is actually in the proof on hand above, never invent a testimonial, a number, or a credential that was not given. If nothing on hand actually backs a claim, set gap to true and leave proofText thin or empty rather than making something up. Prefer psychological proof types when they genuinely fit, since this category is underused, but never force one.
+
+Return ONLY valid JSON, no fences: escape any quote marks inside a string as \", and never put a literal line break inside a string value.
+{"pairings":[{"claim":"the specific claim or promise","proofTypeId":"one of the ids above","proofText":"one sentence using only real material on hand, or empty if gap is true","gap":false}]}`;
+      const out = await callClaude(prompt, 1800);
+      const j = parseJSON(out);
+      setProofPairing(Array.isArray(j.pairings) ? j.pairings.slice(0, 4) : []);
+      markDone("proof");
+    } catch (e) { setError("Could not build proof pairing. " + ((e && e.message) || "Unknown error") + ". Try again, or fill the Proof block by hand."); }
     finally { setBusy(""); }
   }
 
@@ -877,6 +941,31 @@ Return ONLY JSON, no fences:
                   {notes[n] && <div style={{ fontSize: 11.5, color: "#9a9aa0", marginTop: 3, fontStyle: "italic" }}>{notes[n]}</div>}
                 </div>
               ))}
+            </section>
+
+            <section style={card}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
+                <h2 style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>Proof pairing</h2>
+                <button style={btnState("proof", { ...btnGhost, padding: "6px 10px", fontSize: 12 })} onClick={buildProofPairing} disabled={busy === "proof"}>{busy === "proof" ? <><Spinner /> Matching proof</> : "Suggest proof pairing"}</button>
+              </div>
+              <p style={{ margin: "0 0 12px", fontSize: 12.5, color: "#6b6b70" }}>Matches proof you actually have to the specific claims you are making. Bigger claims get pushed toward harder-to-fake proof when you have it. Never invents evidence.</p>
+              {proofPairing.length > 0 && proofPairing.map((p, i) => {
+                const type = PROOF_TYPES.find((t) => t.id === p.proofTypeId);
+                return (
+                  <div key={i} style={{ borderTop: i > 0 ? "1px solid #f0f0f2" : "none", paddingTop: i > 0 ? 10 : 0, marginTop: i > 0 ? 10 : 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#1c1e21", marginBottom: 3 }}>{p.claim}</div>
+                    {type && <div style={{ marginBottom: 4 }}><Chip text={`${type.category} · ${type.strength}/5${type.underused ? " · underused" : ""}`} color={BLOCKS.Proof.color} /> <span style={{ fontSize: 12, color: "#6b6b70" }}>{type.name}</span></div>}
+                    {p.gap ? (
+                      <div style={{ fontSize: 12.5, color: "#7A0E12", fontStyle: "italic" }}>No real proof on hand for this claim yet. Worth softening the claim or getting the proof before spending on it.</div>
+                    ) : (
+                      <>
+                        <div style={{ fontSize: 13, color: "#1f1f22", marginBottom: 6 }}>{p.proofText}</div>
+                        <button style={{ ...btnGhost, padding: "5px 10px", fontSize: 12 }} onClick={() => setBlock("Proof", p.proofText)}>Use in Proof block</button>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
             </section>
 
             <section style={card}>

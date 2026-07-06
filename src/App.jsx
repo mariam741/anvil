@@ -184,7 +184,7 @@ const PRESETS = {
 // callClaude (patched for our own backend)
 // Posts to /api/generate instead of the Anthropic URL directly, and reads data.text.
 // Because /api is served from the same Vercel project as the app, there is no CORS or key in the browser.
-async function callClaude(prompt, maxTokens = 1500) {
+async function callClaude(prompt, maxTokens = 1500, system = null) {
   const TIMEOUT_MS = 70000; // stay above the server's 60s maxDuration so its own timeout, if any, surfaces first
   for (let attempt = 0; attempt < 2; attempt++) {
     let res;
@@ -194,7 +194,7 @@ async function callClaude(prompt, maxTokens = 1500) {
       res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, max_tokens: maxTokens }),
+        body: JSON.stringify({ prompt, max_tokens: maxTokens, ...(system ? { system } : {}) }),
         signal: controller.signal,
       });
     } catch (netErr) {
@@ -483,21 +483,28 @@ DREAM OUTCOME(S): ${dreamOutcomes || intake.dream || "(infer)"}`;
 PROOF GAPS: ${JSON.stringify(avatar.proofGaps || [])}`
         : `PROOF THEY HAVE: ${intake.proof || "(thin or unspecified)"}`;
       const typesList = PROOF_TYPES.map((p) => `${p.id}: ${p.name} [${p.category}, hard-to-fake ${p.strength}/5${p.underused ? ", underused" : ""}] - ${p.desc}`).join("\n");
-      const prompt =
+      // The taxonomy, voice rule, and task instructions are identical on every call to
+      // this function (they only change if the voice or the regulated toggle changes),
+      // and together they are close to the 1,024-token minimum Sonnet needs to cache at
+      // all, so this is the one prompt in the app where marking a cache breakpoint is
+      // actually worth doing. Only the offer-specific claims and proof stay dynamic.
+      const systemText =
 `You are a direct-response strategist pairing proof to claims, in the Anvil framework.
-OFFER: ${intake.offer}
-${claimsContext}
-${proofOnHand}
 ${voiceLine()}${complianceLine()}
 
-Identify 2 to 4 specific claims or promises being made, pulled from the Promise block and dream outcomes above, do not invent new claims. For each claim, pick the single best-fitting proof type from this closed list, using the id exactly as written:
+You will be given an offer, a promise or dream outcome, and the proof already on hand. Identify 2 to 4 specific claims or promises being made, pulled only from what you are given, do not invent new claims. For each claim, pick the single best-fitting proof type from this closed list, using the id exactly as written:
 ${typesList}
 
-Rules: match proof strength to the size of the claim; a bold or specific promise needs a harder-to-fake proof type when one is available, a modest claim can use a lighter one. Only draft proofText from what is actually in the proof on hand above, never invent a testimonial, a number, or a credential that was not given. If nothing on hand actually backs a claim, set gap to true and leave proofText thin or empty rather than making something up. Prefer psychological proof types when they genuinely fit, since this category is underused, but never force one.
+Rules: match proof strength to the size of the claim; a bold or specific promise needs a harder-to-fake proof type when one is available, a modest claim can use a lighter one. Only draft proofText from what is actually in the proof on hand, never invent a testimonial, a number, or a credential that was not given. If nothing on hand actually backs a claim, set gap to true and leave proofText thin or empty rather than making something up. Prefer psychological proof types when they genuinely fit, since this category is underused, but never force one.
 
 Return ONLY valid JSON, no fences: escape any quote marks inside a string as \", and never put a literal line break inside a string value.
 {"pairings":[{"claim":"the specific claim or promise","proofTypeId":"one of the ids above","proofText":"one sentence using only real material on hand, or empty if gap is true","gap":false}]}`;
-      const out = await callClaude(prompt, 1800);
+      const prompt =
+`OFFER: ${intake.offer}
+${claimsContext}
+${proofOnHand}`;
+      const system = [{ type: "text", text: systemText, cache_control: { type: "ephemeral" } }];
+      const out = await callClaude(prompt, 1800, system);
       const j = parseJSON(out);
       setProofPairing(Array.isArray(j.pairings) ? j.pairings.slice(0, 4) : []);
       markDone("proof");

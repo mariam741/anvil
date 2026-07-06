@@ -575,11 +575,12 @@ ${existingNames}
 ${objectionsText}
 ${voiceLine()}${complianceLine()}
 
-Write 4 intuition pumps, one metaphor from each of these 4 categories, matched to how this specific audience already thinks about their own world, not generic:
-- natural: draws on something from nature or the body
-- mechanical: draws on a machine, system, or process
-- force: draws on physical force, pressure, momentum, or resistance
-- association: draws on a familiar, unrelated everyday concept the audience already understands
+Write exactly 4 intuition pumps, one metaphor for each of these 4 fixed types, using the type id exactly as written, each type exactly once, no repeats and none skipped:
+natural: draws on something from nature or the body
+mechanical: draws on a machine, system, or process
+force: draws on physical force, pressure, momentum, or resistance
+association: draws on a familiar, unrelated everyday concept the audience already understands
+Match each metaphor to how this specific audience already thinks about their own world, not generic.
 
 Then write 3 names for the real mechanism above, at three different levels of how much each one reveals:
 - descriptive: says plainly what it does, no mystery

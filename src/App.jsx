@@ -100,6 +100,15 @@ const CURIOSITY_QUADRANTS = [
   { id: "your_problem", label: "What you see differently, about the problem" },
   { id: "your_solution", label: "What you see differently, about the solution" },
 ];
+// Pain Chain and Promise Ladder share the same 4-rung shape: general, specific,
+// how it shows up in life, and the deep emotion underneath. Pain and Promise are
+// meant to mirror each other rung for rung.
+const LADDER_RUNGS = [
+  { id: "general", label: "How people describe it in general" },
+  { id: "specific", label: "The specific way it actually shows up" },
+  { id: "life", label: "How it plays out in day-to-day life" },
+  { id: "emotion", label: "The deep emotion underneath it" },
+];
 const CORPUS_CAP = 6000;
 const HL_MAX = 30, DESC_MAX = 90, PATH_MAX = 15;
 
@@ -298,6 +307,8 @@ export default function App() {
   const [intuitionPumps, setIntuitionPumps] = useState([]);
   const [evocativeNames, setEvocativeNames] = useState([]);
   const [antiConstraintNames, setAntiConstraintNames] = useState([]);
+  const [painChain, setPainChain] = useState([]);
+  const [promiseLadder, setPromiseLadder] = useState([]);
   const [templateId, setTemplateId] = useState("auto");
   const [recommended, setRecommended] = useState(null);
   const [testAxis, setTestAxis] = useState("Hook");
@@ -600,6 +611,41 @@ Return ONLY valid JSON, no fences: escape any quote marks inside a string as \",
       setAntiConstraintNames(Array.isArray(j.antiConstraintNames) ? j.antiConstraintNames.slice(0, 2) : []);
       markDone("naming");
     } catch (e) { setError("Could not build naming and metaphor. " + ((e && e.message) || "Unknown error") + ". Try again, or name it by hand."); }
+    finally { setBusy(""); }
+  }
+
+  async function buildPainPromiseLadder() {
+    setError("");
+    const pains = avatar && Array.isArray(avatar.pains) ? avatar.pains : [];
+    const dreamOutcomes = avatar && Array.isArray(avatar.dreamOutcomes) ? avatar.dreamOutcomes : [];
+    const hasMaterial = pains.length > 0 || dreamOutcomes.length > 0 || blocks.Pain.trim() || blocks.Promise.trim() || intake.struggle.trim() || intake.dream.trim();
+    if (!hasMaterial) { setError("Fill in Pain or Promise, or the struggle and dream fields, or build the avatar first. The ladders need a real pain and desire to build from."); return; }
+    setBusy("ladder");
+    try {
+      const material = `PAIN(S): ${JSON.stringify(pains.length > 0 ? pains : [blocks.Pain || intake.struggle || "(infer)"])}
+DREAM OUTCOME(S): ${JSON.stringify(dreamOutcomes.length > 0 ? dreamOutcomes : [blocks.Promise || intake.dream || "(infer)"])}`;
+      const rungList = LADDER_RUNGS.map((r) => `${r.id}: ${r.label}`).join("\n");
+      const prompt =
+`You are a direct-response strategist building a layered Pain Chain and a parallel Promise Ladder, in the Anvil framework.
+OFFER: ${intake.offer}
+${material}
+${voiceLine()}${complianceLine()}
+
+Build a Pain Chain: exactly 4 rungs, one for each of these fixed rungs, using the id exactly as written, each rung exactly once, no repeats and none skipped, moving from the broad and general down to the specific, felt reality:
+${rungList}
+
+Each rung should get sharper and more specific than the one before it, ending on the real emotional weight underneath the pain, not just a restatement of the general complaint in different words.
+
+Then build a Promise Ladder with the same 4 rungs, mirroring the Pain Chain rung for rung, but for the dream outcome instead of the pain: what people say they want in general, the specific way that shows up, how it plays out in daily life once solved, and the deep emotional relief or pride underneath it.
+
+Return ONLY valid JSON, no fences: escape any quote marks inside a string as \", and never put a literal line break inside a string value.
+{"painChain":[{"rung":"one of the 4 ids above","text":"one to two sentences"}],"promiseLadder":[{"rung":"one of the 4 ids above","text":"one to two sentences"}]}`;
+      const out = await callClaude(prompt, 1800);
+      const j = parseJSON(out);
+      setPainChain(Array.isArray(j.painChain) ? j.painChain.slice(0, 4) : []);
+      setPromiseLadder(Array.isArray(j.promiseLadder) ? j.promiseLadder.slice(0, 4) : []);
+      markDone("ladder");
+    } catch (e) { setError("Could not build the pain chain and promise ladder. " + ((e && e.message) || "Unknown error") + ". Try again, or fill Pain and Promise by hand."); }
     finally { setBusy(""); }
   }
 
@@ -1204,6 +1250,44 @@ Return ONLY JSON, no fences:
                       </div>
                     </div>
                   ))}
+                </div>
+              )}
+            </section>
+
+            <section style={card}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
+                <h2 style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>Pain chain and promise ladder</h2>
+                <button style={btnState("ladder", { ...btnGhost, padding: "6px 10px", fontSize: 12 })} onClick={buildPainPromiseLadder} disabled={busy === "ladder"}>{busy === "ladder" ? <><Spinner /> Building</> : "Build the chain and ladder"}</button>
+              </div>
+              <p style={{ margin: "0 0 12px", fontSize: 12.5, color: "#6b6b70" }}>Each moves from the general complaint or desire down to the specific, felt reality underneath it, in 4 matching rungs.</p>
+              {painChain.length > 0 && (
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 700, color: BLOCKS.Pain.ink, marginBottom: 6 }}>Pain chain</div>
+                  {painChain.map((p, i) => {
+                    const rung = LADDER_RUNGS.find((r) => r.id === p.rung);
+                    return (
+                      <div key={i} style={{ marginBottom: 6 }}>
+                        <Chip text={rung ? rung.label : p.rung} color={BLOCKS.Pain.color} />
+                        <div style={{ fontSize: 13, color: "#1f1f22", marginTop: 3 }}>{p.text}</div>
+                      </div>
+                    );
+                  })}
+                  <button style={{ ...btnGhost, padding: "5px 10px", fontSize: 12, marginTop: 4 }} onClick={() => setBlock("Pain", painChain.map((p) => p.text).join(" "))}>Use full chain in Pain block</button>
+                </div>
+              )}
+              {promiseLadder.length > 0 && (
+                <div style={{ borderTop: "1px solid #f0f0f2", paddingTop: 12 }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 700, color: BLOCKS.Promise.ink, marginBottom: 6 }}>Promise ladder</div>
+                  {promiseLadder.map((p, i) => {
+                    const rung = LADDER_RUNGS.find((r) => r.id === p.rung);
+                    return (
+                      <div key={i} style={{ marginBottom: 6 }}>
+                        <Chip text={rung ? rung.label : p.rung} color={BLOCKS.Promise.color} />
+                        <div style={{ fontSize: 13, color: "#1f1f22", marginTop: 3 }}>{p.text}</div>
+                      </div>
+                    );
+                  })}
+                  <button style={{ ...btnGhost, padding: "5px 10px", fontSize: 12, marginTop: 4 }} onClick={() => setBlock("Promise", promiseLadder.map((p) => p.text).join(" "))}>Use full ladder in Promise block</button>
                 </div>
               )}
             </section>

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 
 /*
   ANVIL  by Prompted Forge  (v6)
@@ -132,6 +132,27 @@ const OFFER_STRENGTH_FACTORS = [
   { id: "Constraints", label: "Constraints", desc: "The friction: real objections, money, time, effort." },
   { id: "Conditions", label: "Conditions", desc: "The terms and mechanics: cost, commitment, qualifications." },
 ];
+// Lever checklist: no model call, no fabrication risk, just a fixed reference list.
+// Words are the fast, cheap first part of the job. Offer, creative, audience, the
+// landing page, and speed-to-lead all sit above copy as levers, and this is the
+// reminder that copy alone will not save a broken version of any of the other four.
+const LEVER_CHECKLIST = {
+  landingPage: [
+    { id: "lp1", text: "The landing page headline says the same promise as the ad, close to word for word." },
+    { id: "lp2", text: "The button on the page takes the same next step the ad's CTA promised." },
+    { id: "lp3", text: "Real proof, a testimonial, a number, or a credential, is visible without scrolling." },
+    { id: "lp4", text: "The page loads fast on a phone. Most clicks will be mobile." },
+    { id: "lp5", text: "The form only asks for what is actually needed to take this first step, nothing more." },
+    { id: "lp6", text: "There is one clear next step on the page, not three competing links." },
+  ],
+  speedToLead: [
+    { id: "st1", text: "Someone or something is notified the moment a lead comes in." },
+    { id: "st2", text: "This business can call back within 5 minutes. Response speed is one of the biggest levers on lead conversion." },
+    { id: "st3", text: "There is a text or email follow-up for anyone who does not pick up the phone." },
+    { id: "st4", text: "A lead that goes quiet gets at least one more touch the same day." },
+  ],
+};
+const LEVER_CHECKLIST_STORAGE_KEY = "anvil_lever_checklist_checked";
 const CORPUS_CAP = 6000;
 const HL_MAX = 30, DESC_MAX = 90, PATH_MAX = 15;
 
@@ -335,6 +356,17 @@ export default function App() {
   const [conditionsResult, setConditionsResult] = useState([]);
   const [offerStrength, setOfferStrength] = useState([]);
   const [offerStrengthLever, setOfferStrengthLever] = useState("");
+  const [checkedLevers, setCheckedLevers] = useState(() => {
+    try {
+      const raw = window.localStorage.getItem(LEVER_CHECKLIST_STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) { return []; }
+  });
+  useEffect(() => {
+    try { window.localStorage.setItem(LEVER_CHECKLIST_STORAGE_KEY, JSON.stringify(checkedLevers)); } catch (e) {}
+  }, [checkedLevers]);
+  const toggleLever = (id) => setCheckedLevers((c) => c.includes(id) ? c.filter((x) => x !== id) : [...c, id]);
   const [templateId, setTemplateId] = useState("auto");
   const [recommended, setRecommended] = useState(null);
   const [testAxis, setTestAxis] = useState("Hook");
@@ -855,6 +887,7 @@ Output rules:
 - description: 30 chars max.
 - cta: choose ONE exactly from: ${ctaList.join(", ")}.
 - imageHeadline: 7 words max. imageSubline: 8 words max.
+- creativeBrief: 2 to 4 sentences for whoever shoots or designs the image, not the copywriter. Say what must actually be visible in the frame, one concrete detail tied to this offer or its proof, never a generic stock-photo description like "happy customer" or "person on phone." Say the mood or style in plain terms. Name one specific thing to avoid, the cliche this category always falls into. If you do not have enough to make it concrete, say so plainly instead of padding it with generic direction.
 Apply Polish and use the customer's real voice. Clarity comes first. Use only the blocks that earn their place; never pad or cram to inflate the count. Avoid high-saturation angles.
 
 Return ONLY JSON, no fences:
@@ -1524,6 +1557,38 @@ Return ONLY JSON, no fences:
             <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
               {results.map((r) => r.kind === "test" ? <TestSetView key={r.id} t={r} /> : r.kind === "rsa" ? <RsaCard key={r.id} r={r} /> : <AdPreview key={r.id} r={r} />)}
             </div>
+
+            {results.length > 0 && (() => {
+              const latestAd = results.find((r) => r.kind === "ad");
+              const extraLp = latestAd && latestAd.cta ? { id: "lp_cta", text: `Your last ad's CTA was "${latestAd.cta}." The landing page button should say the same thing, not something close.` } : null;
+              const extraSt = isLeadGen && intake.leadOffer.trim() ? { id: "st_lead", text: `Your lead offer is "${intake.leadOffer.trim()}." Make sure the page and the follow-up actually deliver that, not something adjacent.` } : null;
+              const lpItems = extraLp ? [...LEVER_CHECKLIST.landingPage, extraLp] : LEVER_CHECKLIST.landingPage;
+              const stItems = extraSt ? [...LEVER_CHECKLIST.speedToLead, extraSt] : LEVER_CHECKLIST.speedToLead;
+              const Row = (item) => (
+                <label key={item.id} style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 8, cursor: "pointer", fontSize: 13, color: checkedLevers.includes(item.id) ? "#9a9aa0" : "#1f1f22", textDecoration: checkedLevers.includes(item.id) ? "line-through" : "none", lineHeight: 1.4 }}>
+                  <input type="checkbox" checked={checkedLevers.includes(item.id)} onChange={() => toggleLever(item.id)} style={{ marginTop: 3, flexShrink: 0 }} />
+                  <span>{item.text}</span>
+                </label>
+              );
+              return (
+                <section style={{ ...card, marginTop: 18 }}>
+                  <h2 style={{ margin: "0 0 4px", fontSize: 16, fontWeight: 800 }}>Before you spend on this</h2>
+                  <p style={{ margin: "0 0 12px", fontSize: 12.5, color: "#6b6b70", lineHeight: 1.5 }}>Copy is the fast first part of the job. Offer, creative, audience, the landing page, and how fast a lead gets a response all matter more than the words above. Nothing here is generated, it is just the reminder.</p>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 20 }}>
+                    <div>
+                      <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase", color: "#9a9aa0", marginBottom: 8 }}>Landing page match</div>
+                      {lpItems.map(Row)}
+                    </div>
+                    {isLeadGen && (
+                      <div>
+                        <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase", color: "#9a9aa0", marginBottom: 8 }}>Speed to lead</div>
+                        {stItems.map(Row)}
+                      </div>
+                    )}
+                  </div>
+                </section>
+              );
+            })()}
           </div>
         </div>
       </main>

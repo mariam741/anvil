@@ -109,6 +109,18 @@ const LADDER_RUNGS = [
   { id: "life", label: "How it plays out in day-to-day life" },
   { id: "emotion", label: "The deep emotion underneath it" },
 ];
+// Conditions, the 5 named types. Two of these, triggers and riskReversal, are the
+// highest fabrication risk in the app: an invented deadline is fake scarcity, an
+// invented guarantee is a false claim. Each type must be grounded in a real fact
+// already on hand or explicitly flagged as a gap, never filled in with something
+// that sounds plausible.
+const CONDITIONS_TYPES = [
+  { id: "qualifications", name: "Qualifications", desc: "Who this is for, or who it is not for. Filters the lead before they book." },
+  { id: "triggers", name: "Conversion triggers", desc: "A real reason to act now: an actual deadline, seasonal window, or limited capacity. Never fake urgency or invented scarcity." },
+  { id: "riskReversal", name: "Risk reversal", desc: "Removes the downside of saying yes: a real guarantee, trial period, or reversible commitment." },
+  { id: "valueAdds", name: "Value adds", desc: "A real bonus or extra that is actually included with the offer." },
+  { id: "terms", name: "Terms and structures", desc: "The practical mechanics: cost structure, length of commitment, delivery timeline, cancellation." },
+];
 const CORPUS_CAP = 6000;
 const HL_MAX = 30, DESC_MAX = 90, PATH_MAX = 15;
 
@@ -309,6 +321,7 @@ export default function App() {
   const [antiConstraintNames, setAntiConstraintNames] = useState([]);
   const [painChain, setPainChain] = useState([]);
   const [promiseLadder, setPromiseLadder] = useState([]);
+  const [conditionsResult, setConditionsResult] = useState([]);
   const [templateId, setTemplateId] = useState("auto");
   const [recommended, setRecommended] = useState(null);
   const [testAxis, setTestAxis] = useState("Hook");
@@ -646,6 +659,36 @@ Return ONLY valid JSON, no fences: escape any quote marks inside a string as \",
       setPromiseLadder(Array.isArray(j.promiseLadder) ? j.promiseLadder.slice(0, 4) : []);
       markDone("ladder");
     } catch (e) { setError("Could not build the pain chain and promise ladder. " + ((e && e.message) || "Unknown error") + ". Try again, or fill Pain and Promise by hand."); }
+    finally { setBusy(""); }
+  }
+
+  async function buildConditions() {
+    setError("");
+    if (!intake.offer.trim()) { setError("Fill in the offer first. Conditions needs a real offer to wrap."); return; }
+    setBusy("conditions");
+    try {
+      const material = `OFFER: ${intake.offer}
+${isLeadGen ? `LEAD MAGNET (the free next step): ${intake.leadOffer || "(not given)"}` : "OBJECTIVE: direct sale"}
+PROOF ON HAND: ${JSON.stringify((avatar && avatar.proofTrusted) || (intake.proof ? [intake.proof] : []))}
+EXISTING CONDITIONS TEXT, IF ANY: ${blocks.Conditions || "(none)"}`;
+      const typesList = CONDITIONS_TYPES.map((t) => `${t.id}: ${t.name}, ${t.desc}`).join("\n");
+      const prompt =
+`You are a direct-response strategist writing the Conditions, the offer wrapper, in the Anvil framework.
+${material}
+${voiceLine()}${complianceLine()}
+
+For each of these 5 fixed types, using the id exactly as written, each type exactly once, no repeats and none skipped:
+${typesList}
+
+Hard rule regardless of voice: never invent a deadline, a limited quantity, a guarantee, a bonus, or a term that is not actually stated in the material above. No manufactured urgency and no fake scarcity of any kind, in any type, in any voice. If the material above genuinely supports a type, write one real, specific sentence for it and set gap to false. If it does not, set gap to true, leave text empty, and instead write a short, specific question in askFor naming exactly the real fact you would need to fill it in, for example asking what the actual refund policy is, or whether there is a real deadline or limited capacity.
+
+Return ONLY valid JSON, no fences: escape any quote marks inside a string as \", and never put a literal line break inside a string value.
+{"conditions":[{"typeId":"one of the 5 ids above","text":"the real, specific sentence, or empty if gap is true","gap":false,"askFor":"the specific question to ask, or empty if gap is false"}]}`;
+      const out = await callClaude(prompt, 1800);
+      const j = parseJSON(out);
+      setConditionsResult(Array.isArray(j.conditions) ? j.conditions.slice(0, 5) : []);
+      markDone("conditions");
+    } catch (e) { setError("Could not build the conditions. " + ((e && e.message) || "Unknown error") + ". Try again, or fill the Conditions block by hand."); }
     finally { setBusy(""); }
   }
 
@@ -1290,6 +1333,30 @@ Return ONLY JSON, no fences:
                   <button style={{ ...btnGhost, padding: "5px 10px", fontSize: 12, marginTop: 4 }} onClick={() => setBlock("Promise", promiseLadder.map((p) => p.text).join(" "))}>Use full ladder in Promise block</button>
                 </div>
               )}
+            </section>
+
+            <section style={card}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
+                <h2 style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>Conditions</h2>
+                <button style={btnState("conditions", { ...btnGhost, padding: "6px 10px", fontSize: 12 })} onClick={buildConditions} disabled={busy === "conditions"}>{busy === "conditions" ? <><Spinner /> Wrapping the offer</> : "Build the 5 conditions"}</button>
+              </div>
+              <p style={{ margin: "0 0 12px", fontSize: 12.5, color: "#6b6b70" }}>Qualifications, conversion triggers, risk reversal, value adds, and terms. Only ever uses real facts on hand, and flags a question instead of inventing a deadline or a guarantee.</p>
+              {conditionsResult.length > 0 && conditionsResult.map((c, i) => {
+                const type = CONDITIONS_TYPES.find((t) => t.id === c.typeId);
+                return (
+                  <div key={i} style={{ borderTop: i > 0 ? "1px solid #f0f0f2" : "none", paddingTop: i > 0 ? 10 : 0, marginTop: i > 0 ? 10 : 0 }}>
+                    <div style={{ marginBottom: 4 }}><Chip text={type ? type.name : c.typeId} color={BLOCKS.Conditions.color} /></div>
+                    {c.gap ? (
+                      <div style={{ fontSize: 12.5, color: "#7A0E12", fontStyle: "italic" }}>{c.askFor || "Nothing on hand supports this type yet."}</div>
+                    ) : (
+                      <>
+                        <div style={{ fontSize: 13, color: "#1f1f22", marginBottom: 6 }}>{c.text}</div>
+                        <button style={{ ...btnGhost, padding: "5px 10px", fontSize: 12 }} onClick={() => setBlock("Conditions", [blocks.Conditions, c.text].filter(Boolean).join(" "))}>Add to Conditions block</button>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
             </section>
 
             <section style={card}>

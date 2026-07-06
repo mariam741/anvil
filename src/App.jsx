@@ -121,6 +121,17 @@ const CONDITIONS_TYPES = [
   { id: "valueAdds", name: "Value adds", desc: "A real bonus or extra that is actually included with the offer." },
   { id: "terms", name: "Terms and structures", desc: "The practical mechanics: cost structure, length of commitment, delivery timeline, cancellation." },
 ];
+// Offer strength check, the coverage doc's reframed value equation: Promise x (Proof x
+// Curiosity) / (Constraints x Conditions). This is a diagnostic lens applied to the
+// offer itself, before any copy is written, not a score. Reuses the six-block names
+// and colors so it reads as the same framework, not a new one.
+const OFFER_STRENGTH_FACTORS = [
+  { id: "Promise", label: "The promise", desc: "How big and how clear the dream outcome is." },
+  { id: "Proof", label: "Proof", desc: "How believable it is that this will actually work for them." },
+  { id: "Curiosity", label: "Curiosity", desc: "How much pull or interest the offer creates on its own." },
+  { id: "Constraints", label: "Constraints", desc: "The friction: real objections, money, time, effort." },
+  { id: "Conditions", label: "Conditions", desc: "The terms and mechanics: cost, commitment, qualifications." },
+];
 const CORPUS_CAP = 6000;
 const HL_MAX = 30, DESC_MAX = 90, PATH_MAX = 15;
 
@@ -322,6 +333,8 @@ export default function App() {
   const [painChain, setPainChain] = useState([]);
   const [promiseLadder, setPromiseLadder] = useState([]);
   const [conditionsResult, setConditionsResult] = useState([]);
+  const [offerStrength, setOfferStrength] = useState([]);
+  const [offerStrengthLever, setOfferStrengthLever] = useState("");
   const [templateId, setTemplateId] = useState("auto");
   const [recommended, setRecommended] = useState(null);
   const [testAxis, setTestAxis] = useState("Hook");
@@ -699,6 +712,50 @@ Return ONLY valid JSON, no fences: escape any quote marks inside a string as \",
     finally { setBusy(""); }
   }
 
+  async function checkOfferStrength() {
+    setError("");
+    if (!intake.core.trim() && !intake.offer.trim()) { setError("Add a core offer or a front-door offer in Step 0 first. This checks the offer, so it needs one to check."); return; }
+    setBusy("offerStrength");
+    try {
+      const material = `CORE PAID OFFER: ${intake.core || "(not given)"}
+FRONT-DOOR OFFER: ${intake.offer || chosenOffer || manualOffer || "(not given)"}
+AUDIENCE: ${intake.audience || intake.niche || "(not given)"}
+STRUGGLE: ${intake.struggle || "(not given)"}
+DREAM OUTCOME: ${intake.dream || "(not given)"}
+HESITATION: ${intake.hesitation || "(not given)"}
+PROOF ON HAND: ${intake.proof || "(not given)"}
+AVATAR ON FILE: ${avatar ? "yes, use it" : "no"}${avatar ? `
+AVATAR PAINS: ${JSON.stringify(avatar.pains || [])}
+AVATAR DREAM OUTCOMES: ${JSON.stringify(avatar.dreamOutcomes || [])}
+AVATAR PROOF TRUSTED: ${JSON.stringify(avatar.proofTrusted || [])}
+AVATAR OBJECTIONS: ${JSON.stringify(avatar.objections || [])}` : ""}
+BLOCKS FILLED SO FAR: ${BLOCK_NAMES.filter((n) => blocks[n].trim()).join(", ") || "(none yet)"}`;
+      const factorList = OFFER_STRENGTH_FACTORS.map((f) => `${f.id}: ${f.desc}`).join("\n");
+      const prompt =
+`You are a direct-response strategist checking the strength of an offer before any ad copy gets written, in the Anvil framework.
+${material}
+${voiceLine()}${complianceLine()}
+
+The value of an offer comes down to 5 factors: Promise times Proof times Curiosity, divided by Constraints times Conditions. A stronger offer has a bigger, clearer promise, more believable proof, more genuine curiosity or pull, and less friction from constraints and conditions. This is a lens for thinking, never a score, never a number, never a tier or grade of any kind, do not invent one.
+
+For each of these 5 fixed factors, using the id exactly as written, each factor exactly once, no repeats and none skipped:
+${factorList}
+
+Assess only using what is actually given above, never invent a detail about the offer that was not stated. If there is genuinely not enough material yet to assess a factor, set gap to true, leave assessment empty, and write a short, specific question in askFor naming exactly what you would need to know. Otherwise set gap to false, write one or two sentences on what is currently strong or thin about that factor, and one concrete, specific suggestion for tightening it.
+
+Then write one closing sentence in biggestLever naming which single factor is the most worth fixing before writing copy, and why, grounded in what you actually assessed above.
+
+Return ONLY valid JSON, no fences: escape any quote marks inside a string as \", and never put a literal line break inside a string value.
+{"factors":[{"factorId":"one of the 5 ids above","assessment":"the assessment, or empty if gap is true","suggestion":"the concrete suggestion, or empty if gap is true","gap":false,"askFor":"the specific question, or empty if gap is false"}],"biggestLever":"one closing sentence"}`;
+      const out = await callClaude(prompt, 1800);
+      const j = parseJSON(out);
+      setOfferStrength(Array.isArray(j.factors) ? j.factors.slice(0, 5) : []);
+      setOfferStrengthLever(typeof j.biggestLever === "string" ? j.biggestLever : "");
+      markDone("offerStrength");
+    } catch (e) { setError("Could not check the offer strength. " + ((e && e.message) || "Unknown error") + ". Try again."); }
+    finally { setBusy(""); }
+  }
+
   async function recommendTemplate() {
     setError("");
     if (!intake.offer.trim()) { setError("Add what you sell so the engine can match a template."); return; }
@@ -999,6 +1056,38 @@ Return ONLY JSON, no fences:
                     <div style={{ height: 8 }} />
                     <button style={btnState("offers", { ...btnGhost, justifyContent: "center", width: "100%" })} onClick={() => generateOffers(offerSteer)} disabled={busy === "offers"}>{busy === "offers" ? <><Spinner /> Regenerating</> : "Regenerate around this"}</button>
                   </div>
+                </div>
+              )}
+
+              {(intake.core.trim() || intake.offer.trim()) && (
+                <div style={{ marginTop: 14, borderTop: "1px solid #f0f0f2", paddingTop: 12 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
+                    <label style={label}>Offer strength check</label>
+                    <button style={btnState("offerStrength", { ...btnGhost, padding: "6px 10px", fontSize: 12 })} onClick={checkOfferStrength} disabled={busy === "offerStrength"}>{busy === "offerStrength" ? <><Spinner /> Checking</> : "Check the offer"}</button>
+                  </div>
+                  <p style={{ margin: "0 0 10px", fontSize: 12, color: "#9a9aa0", lineHeight: 1.45 }}>A thinking aid on the offer itself, before any copy gets written. Not a score.</p>
+                  {offerStrength.length > 0 && (
+                    <div>
+                      {offerStrength.map((f, i) => {
+                        const factor = OFFER_STRENGTH_FACTORS.find((x) => x.id === f.factorId);
+                        const color = (BLOCKS[f.factorId] && BLOCKS[f.factorId].color) || "#6b6b70";
+                        return (
+                          <div key={i} style={{ marginBottom: 8 }}>
+                            <Chip text={factor ? factor.label : f.factorId} color={color} />
+                            {f.gap ? (
+                              <div style={{ fontSize: 12.5, color: "#7A0E12", fontStyle: "italic", marginTop: 3 }}>{f.askFor || "Not enough on hand yet to assess this."}</div>
+                            ) : (
+                              <>
+                                <div style={{ fontSize: 13, color: "#1f1f22", marginTop: 3 }}>{f.assessment}</div>
+                                <div style={{ fontSize: 12.5, color: "#3a3a3e", marginTop: 2 }}><strong>Tighten it:</strong> {f.suggestion}</div>
+                              </>
+                            )}
+                          </div>
+                        );
+                      })}
+                      {offerStrengthLever && <div style={{ fontSize: 13, fontWeight: 700, color: "#141414", marginTop: 10, borderTop: "1px solid #f0f0f2", paddingTop: 10 }}>{offerStrengthLever}</div>}
+                    </div>
+                  )}
                 </div>
               )}
             </section>

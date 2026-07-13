@@ -190,7 +190,7 @@ const emptySegmentMap = () => ({
   outcomes: [],
   demographics: { buyer: [], gender: [], age: [], raceEthnicity: [], identity: [] },
   facets: { belief: [], identity: [], state: [], value: [], occasion: [] },
-  personas: [], // Milestone 2, not built yet
+  personas: [], // composed by composePersonas(), Milestone 2
 });
 
 const CORPUS_CAP = 6000;
@@ -916,6 +916,75 @@ Return ONLY valid JSON, no fences: escape any quote marks inside a string as \",
     finally { setBusy(""); }
   }
 
+  // Segment builder Milestone 2: compose personas from the WHAT/WHO/WHY inputs.
+  // Grounds every persona in what was actually entered, an outcome, demographic
+  // values, and up to 2 facets, never inventing a new one. The say-it test and
+  // the gate are asked for in the prompt, and the facet-count and existence
+  // checks are also enforced here in code, not just asked for, since prompt-only
+  // rules have not held reliably for grounding elsewhere in this app.
+  function groundPersona(p, map) {
+    if (!p || typeof p !== "object") return null;
+    const outcome = map.outcomes.find((o) => o.name.trim().toLowerCase() === String(p.outcomeName || "").trim().toLowerCase());
+    if (!outcome) return null; // references an outcome that was never entered, discard rather than invent
+    const demographics = {};
+    if (p.demographics && typeof p.demographics === "object") {
+      for (const groupId of Object.keys(p.demographics)) {
+        const val = p.demographics[groupId];
+        if (Array.isArray(map.demographics[groupId]) && map.demographics[groupId].includes(val)) demographics[groupId] = val;
+      }
+    }
+    const facets = Array.isArray(p.facets)
+      ? p.facets.filter((f) => f && Array.isArray(map.facets[f.familyId]) && map.facets[f.familyId].includes(f.value)).slice(0, 2)
+      : [];
+    return { id: Date.now() + Math.random(), name: String(p.name || "").trim(), description: String(p.description || "").trim(), outcomeId: outcome.id, outcomeName: outcome.name, demographics, facets };
+  }
+
+  async function composePersonas() {
+    setError("");
+    if (segmentMap.outcomes.length === 0) { setError("Add at least one outcome first. A persona needs a real outcome to be built around."); return; }
+    const hasWhoWhy = Object.values(segmentMap.demographics).some((v) => v.length > 0) || Object.values(segmentMap.facets).some((v) => v.length > 0);
+    if (!hasWhoWhy) { setError("Add at least some demographics or facets first. A persona is more than just an outcome."); return; }
+    setBusy("personas");
+    try {
+      const outcomesText = segmentMap.outcomes.map((o) => `${o.name} [lens: ${o.lens}]${o.subOutcomes.length ? ", sub-outcomes: " + o.subOutcomes.join("; ") : ""}`).join("\n");
+      const demographicsText = DEMOGRAPHIC_GROUPS.map((g) => `${g.id}: ${JSON.stringify(segmentMap.demographics[g.id])}`).join("\n");
+      const facetsText = FACET_FAMILIES.map((f) => `${f.id}: ${JSON.stringify(segmentMap.facets[f.id])}`).join("\n");
+      const prompt =
+`You are composing real, distinct buyer personas from a market already sliced into outcomes, demographics, and facets, in the Anvil segment builder.
+SCOPE: ${segmentMap.scope || "(not given)"}
+OUTCOMES:
+${outcomesText}
+DEMOGRAPHICS:
+${demographicsText}
+FACETS:
+${facetsText}
+${voiceLine()}${complianceLine()}
+
+A persona is a coordinate: exactly one outcome from the list above, plus one or more demographic values from the lists above, plus exactly one or two facets from the lists above. Use only values that are actually listed, word for word, never invent a new outcome, demographic, or facet. Never use three or more facets in one persona, that describes one person in a forum thread, not a real pocket of buyers.
+
+Apply two tests to every candidate before keeping it:
+- The say-it test. Would a real customer say this out loud, as who they are and what they want? If it reads like a marketer's abstraction, drop it.
+- The gate. Only keep a persona if it would need a meaningfully different ad than every other persona you keep. If two candidates would run the same ad, they are the same persona, merge them into one or drop the redundant one.
+
+The power move is stacking two facets from different families to find a real pocket nobody targets, for example a retiree who is also afraid of the procedure, not just a retiree. Only stack two facets when it is a genuinely different, real group of people, not a more specific description of the same one persona.
+
+Return between 2 and 6 personas, only as many as genuinely pass the gate. Fewer strong personas beats many overlapping ones. Give each a short, plain, natural name a strategist would actually use, not a joke name or a caricature, and a one-line description a real person in this group might recognize themselves in.
+
+Return ONLY valid JSON, no fences: escape any quote marks inside a string as \", and never put a literal line break inside a string value.
+{"personas":[{"name":"...","description":"one sentence","outcomeName":"the exact outcome name from the list above","demographics":{"groupId":"one exact value from that group's list"},"facets":[{"familyId":"...","value":"one exact value from that family's list"}]}]}`;
+      const out = await callClaude(prompt, 2000);
+      const j = parseJSON(out);
+      const grounded = (Array.isArray(j.personas) ? j.personas : []).map((p) => groundPersona(p, segmentMap)).filter(Boolean).slice(0, 6);
+      setSegmentMap((s) => ({ ...s, personas: grounded }));
+      markDone("personas");
+    } catch (e) { setError("Could not compose personas. " + ((e && e.message) || "Unknown error") + ". Try again."); }
+    finally { setBusy(""); }
+  }
+
+  function removePersona(id) {
+    setSegmentMap((s) => ({ ...s, personas: s.personas.filter((p) => p.id !== id) }));
+  }
+
   async function recommendTemplate() {
     setError("");
     if (!intake.offer.trim()) { setError("Add what you sell so the engine can match a template."); return; }
@@ -1303,6 +1372,36 @@ Return ONLY JSON, no fences:
                   <TagAdder onAdd={(t) => addFacet(f.id, t)} placeholder={`Add a ${f.label.toLowerCase()} facet`} />
                 </div>
               ))}
+
+              <div style={{ marginTop: 18, borderTop: "1px solid #f0f0f2", paddingTop: 14 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 700, color: "#141414" }}>Personas, composed from the above</div>
+                  <button style={btnState("personas", { ...btnGhost, padding: "6px 10px", fontSize: 12 })} onClick={composePersonas} disabled={busy === "personas"}>{busy === "personas" ? <><Spinner /> Composing</> : "Compose personas"}</button>
+                </div>
+                <p style={{ margin: "0 0 10px", fontSize: 12, color: "#9a9aa0", lineHeight: 1.45 }}>Each persona is one outcome plus who they are plus one or two facets. No score, no ranking, delete what does not land.</p>
+                {segmentMap.personas.length > 0 && (
+                  <div>
+                    {segmentMap.personas.map((p) => (
+                      <div key={p.id} style={{ border: "1px solid #ececef", borderRadius: 10, padding: 10, marginBottom: 8 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
+                          <span style={{ fontWeight: 800, fontSize: 13.5 }}>{p.name}</span>
+                          <span onClick={() => removePersona(p.id)} style={{ cursor: "pointer", color: "#9a9aa0", fontWeight: 700 }}>×</span>
+                        </div>
+                        <div style={{ fontSize: 12.5, color: "#3a3a3e", lineHeight: 1.45, marginBottom: 6 }}>{p.description}</div>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                          <Chip text={p.outcomeName} color={BLOCKS.Promise.color} />
+                          {Object.entries(p.demographics).map(([groupId, val]) => (
+                            <Chip key={groupId} text={val} color={BLOCKS.Constraints.color} />
+                          ))}
+                          {p.facets.map((f, i) => (
+                            <Chip key={i} text={f.value} color={BLOCKS.Curiosity.color} />
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </section>
 
             <div style={{ display: "flex", gap: 6, background: "#ececef", padding: 4, borderRadius: 10 }}>

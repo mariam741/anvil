@@ -153,6 +153,46 @@ const LEVER_CHECKLIST = {
   ],
 };
 const LEVER_CHECKLIST_STORAGE_KEY = "anvil_lever_checklist_checked";
+
+// Segment builder (WHAT, WHO, WHY). Milestone 1 only: capture the three input
+// layers and hold them in memory, shaped to match the segment entity in the
+// Forge Market data-intent map, so swapping to real storage later is a small
+// change, not a rewrite. No database here. That is Breyden's lane.
+// Fixed lens options for an outcome, from the segments spec.
+const SEGMENT_OUTCOME_LENSES = [
+  { id: "type", label: "Type" },
+  { id: "location", label: "Location" },
+  { id: "function", label: "Function" },
+  { id: "moment", label: "Moment" },
+  { id: "severity", label: "Severity" },
+];
+// Fixed demographic groups, in the order the spec asks for: buyer first, since
+// the payer may not be the user, then gender, age, race/ethnicity, identity.
+const DEMOGRAPHIC_GROUPS = [
+  { id: "buyer", label: "Buyer", desc: "Who actually pays or decides. May not be the user, a spouse booking for a partner, an owner buying for the practice." },
+  { id: "gender", label: "Gender", desc: "" },
+  { id: "age", label: "Age", desc: "As a life stage, not a number. New parent, empty nester, not \"35 to 44.\"" },
+  { id: "raceEthnicity", label: "Race or ethnicity", desc: "Only where it changes the product's job." },
+  { id: "identity", label: "Visible identity", desc: "Visible identity facts a stranger could tick from across the room." },
+];
+// Fixed facet families, from the segments spec. Belief is the biggest trap:
+// find a belief the customer already holds, never install one they do not.
+const FACET_FAMILIES = [
+  { id: "belief", label: "Belief", desc: "A theory they already hold. Find it, do not install it." },
+  { id: "identity", label: "Identity", desc: "A chosen self-label. Controls vocabulary and hard-nos." },
+  { id: "state", label: "State", desc: "What is true for them right now. Controls the problem you lead with." },
+  { id: "value", label: "Value", desc: "What matters in the buy. Controls the promise." },
+  { id: "occasion", label: "Occasion", desc: "The event that put them in-market. Controls the why-now." },
+];
+const SEGMENT_STORAGE_KEY = "anvil_segment_map_scaffold"; // temporary scaffold, not the real storage. Breyden's tables replace this.
+const emptySegmentMap = () => ({
+  scope: "",
+  outcomes: [],
+  demographics: { buyer: [], gender: [], age: [], raceEthnicity: [], identity: [] },
+  facets: { belief: [], identity: [], state: [], value: [], occasion: [] },
+  personas: [], // Milestone 2, not built yet
+});
+
 const CORPUS_CAP = 6000;
 const HL_MAX = 30, DESC_MAX = 90, PATH_MAX = 15;
 
@@ -334,6 +374,57 @@ const CONF = { high: { t: "High confidence", c: "#1B7A43", bg: "#E1F1E7" }, medi
 const FREQ = { high: "#E8242B", medium: "#9a7a0c", low: "#9a9aa0" };
 const Chip = ({ text, color }) => <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".03em", textTransform: "uppercase", color, border: `1px solid ${color}`, borderRadius: 999, padding: "1px 7px", whiteSpace: "nowrap" }}>{text}</span>;
 
+// Small reusable add-a-value input, used across the segment builder's WHAT/WHO/WHY
+// lists so each one does not need its own local state wired by hand.
+const TagAdder = ({ onAdd, placeholder }) => {
+  const [val, setVal] = useState("");
+  const submit = () => { if (val.trim()) { onAdd(val); setVal(""); } };
+  return (
+    <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+      <input
+        style={{ flex: 1, boxSizing: "border-box", border: "1px solid #e2e2e6", borderRadius: 8, padding: "7px 10px", fontSize: 13, fontFamily: "inherit", color: "#141414", outline: "none", background: "#fff" }}
+        value={val}
+        onChange={(e) => setVal(e.target.value)}
+        placeholder={placeholder}
+        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); submit(); } }}
+      />
+      <button type="button" style={{ fontFamily: "inherit", fontWeight: 700, fontSize: 12, padding: "7px 12px", borderRadius: 7, border: "1px solid #d4d4d8", background: "#fff", color: "#141414", cursor: "pointer" }} onClick={submit}>Add</button>
+    </div>
+  );
+};
+const TagList = ({ items, onRemove, color }) => items.length > 0 ? (
+  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+    {items.map((t, i) => (
+      <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, padding: "3px 8px 3px 10px", borderRadius: 999, border: `1px solid ${color || "#d4d4d8"}`, color: "#1f1f22" }}>
+        {t}
+        <span onClick={() => onRemove(i)} style={{ cursor: "pointer", color: "#9a9aa0", fontWeight: 700 }}>×</span>
+      </span>
+    ))}
+  </div>
+) : null;
+// A new outcome needs a name plus a fixed lens, so it gets its own small adder
+// rather than reusing the plain TagAdder.
+const OutcomeAdder = ({ onAdd }) => {
+  const [name, setName] = useState("");
+  const [lens, setLens] = useState(SEGMENT_OUTCOME_LENSES[0].id);
+  const submit = () => { if (name.trim()) { onAdd(name, lens); setName(""); } };
+  return (
+    <div style={{ display: "flex", gap: 6 }}>
+      <input
+        style={{ flex: 1, boxSizing: "border-box", border: "1px solid #e2e2e6", borderRadius: 8, padding: "7px 10px", fontSize: 13, fontFamily: "inherit", color: "#141414", outline: "none", background: "#fff" }}
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="Add an outcome, e.g. eat normally again"
+        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); submit(); } }}
+      />
+      <select value={lens} onChange={(e) => setLens(e.target.value)} style={{ border: "1px solid #e2e2e6", borderRadius: 8, padding: "7px 8px", fontSize: 12.5, fontFamily: "inherit", background: "#fff" }}>
+        {SEGMENT_OUTCOME_LENSES.map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}
+      </select>
+      <button type="button" style={{ fontFamily: "inherit", fontWeight: 700, fontSize: 12, padding: "7px 12px", borderRadius: 7, border: "1px solid #d4d4d8", background: "#fff", color: "#141414", cursor: "pointer" }} onClick={submit}>Add</button>
+    </div>
+  );
+};
+
 
 export default function App() {
   const [mode, setMode] = useState("guided");
@@ -367,6 +458,43 @@ export default function App() {
     try { window.localStorage.setItem(LEVER_CHECKLIST_STORAGE_KEY, JSON.stringify(checkedLevers)); } catch (e) {}
   }, [checkedLevers]);
   const toggleLever = (id) => setCheckedLevers((c) => c.includes(id) ? c.filter((x) => x !== id) : [...c, id]);
+
+  // Segment builder state, Milestone 1. Temporary localStorage scaffold only,
+  // so work survives a refresh while testing, per the START_HERE boundary.
+  // This is not the real storage. Breyden's tables replace this at merge.
+  const [segmentMap, setSegmentMap] = useState(() => {
+    try {
+      const raw = window.localStorage.getItem(SEGMENT_STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : null;
+      return parsed && typeof parsed === "object" ? { ...emptySegmentMap(), ...parsed } : emptySegmentMap();
+    } catch (e) { return emptySegmentMap(); }
+  });
+  useEffect(() => {
+    try { window.localStorage.setItem(SEGMENT_STORAGE_KEY, JSON.stringify(segmentMap)); } catch (e) {}
+  }, [segmentMap]);
+
+  const addOutcome = (name, lens) => {
+    if (!name.trim()) return;
+    setSegmentMap((s) => ({ ...s, outcomes: [...s.outcomes, { id: Date.now() + Math.random(), name: name.trim(), lens, subOutcomes: [] }] }));
+  };
+  const removeOutcome = (id) => setSegmentMap((s) => ({ ...s, outcomes: s.outcomes.filter((o) => o.id !== id) }));
+  const addSubOutcome = (outcomeId, text) => {
+    if (!text.trim()) return;
+    setSegmentMap((s) => ({ ...s, outcomes: s.outcomes.map((o) => o.id === outcomeId ? { ...o, subOutcomes: [...o.subOutcomes, text.trim()] } : o) }));
+  };
+  const removeSubOutcome = (outcomeId, i) => setSegmentMap((s) => ({ ...s, outcomes: s.outcomes.map((o) => o.id === outcomeId ? { ...o, subOutcomes: o.subOutcomes.filter((_, idx) => idx !== i) } : o) }));
+
+  const addDemographic = (groupId, text) => {
+    if (!text.trim()) return;
+    setSegmentMap((s) => ({ ...s, demographics: { ...s.demographics, [groupId]: [...s.demographics[groupId], text.trim()] } }));
+  };
+  const removeDemographic = (groupId, i) => setSegmentMap((s) => ({ ...s, demographics: { ...s.demographics, [groupId]: s.demographics[groupId].filter((_, idx) => idx !== i) } }));
+
+  const addFacet = (familyId, text) => {
+    if (!text.trim()) return;
+    setSegmentMap((s) => ({ ...s, facets: { ...s.facets, [familyId]: [...s.facets[familyId], text.trim()] } }));
+  };
+  const removeFacet = (familyId, i) => setSegmentMap((s) => ({ ...s, facets: { ...s.facets, [familyId]: s.facets[familyId].filter((_, idx) => idx !== i) } }));
   const [templateId, setTemplateId] = useState("auto");
   const [recommended, setRecommended] = useState(null);
   const [testAxis, setTestAxis] = useState("Hook");
@@ -1123,6 +1251,58 @@ Return ONLY JSON, no fences:
                   )}
                 </div>
               )}
+            </section>
+
+            <section style={card}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
+                <h2 style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>Segment builder</h2>
+                <span style={{ fontSize: 11, color: "#9a9aa0" }}>in progress, milestone 1</span>
+              </div>
+              <p style={{ margin: "0 0 12px", fontSize: 12.5, color: "#6b6b70", lineHeight: 1.5 }}>Slice one product into several distinct, real buyers, WHAT they want, WHO they are, WHY they are here, instead of one flat avatar. Held here in memory for now, not yet wired into generation. Ask at every entry: would a real customer say this out loud?</p>
+
+              <label style={label}>Scope, which brand or client this belongs to</label>
+              <input style={field} value={segmentMap.scope} onChange={(e) => setSegmentMap((s) => ({ ...s, scope: e.target.value }))} placeholder="e.g. Cary Dental, implants" />
+
+              <div style={{ height: 16, borderTop: "1px solid #f0f0f2", marginTop: 14 }} />
+
+              <div style={{ marginTop: 14, marginBottom: 4, fontSize: 12.5, fontWeight: 700, color: BLOCKS.Promise.ink }}>WHAT they want, the outcomes</div>
+              <div style={{ fontSize: 11.5, color: "#9a9aa0", marginBottom: 8, lineHeight: 1.4 }}>Sorted by want, not by type. "Get my backyard back," not "less mosquito."</div>
+              {segmentMap.outcomes.map((o) => {
+                const lens = SEGMENT_OUTCOME_LENSES.find((l) => l.id === o.lens);
+                return (
+                  <div key={o.id} style={{ border: "1px solid #ececef", borderRadius: 10, padding: 10, marginBottom: 8 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                      <div><span style={{ fontWeight: 700, fontSize: 13.5 }}>{o.name}</span> <Chip text={lens ? lens.label : o.lens} color={BLOCKS.Promise.color} /></div>
+                      <span onClick={() => removeOutcome(o.id)} style={{ cursor: "pointer", color: "#9a9aa0", fontWeight: 700 }}>×</span>
+                    </div>
+                    <TagList items={o.subOutcomes} onRemove={(i) => removeSubOutcome(o.id, i)} color={BLOCKS.Promise.color} />
+                    <TagAdder onAdd={(t) => addSubOutcome(o.id, t)} placeholder="Add a sub-outcome" />
+                  </div>
+                );
+              })}
+              <OutcomeAdder onAdd={addOutcome} />
+
+              <div style={{ marginTop: 18, marginBottom: 4, fontSize: 12.5, fontWeight: 700, color: BLOCKS.Constraints.ink }}>WHO they are, the demographics</div>
+              <div style={{ fontSize: 11.5, color: "#9a9aa0", marginBottom: 8, lineHeight: 1.4 }}>Traits a stranger could tick from across the room. Buyer first, the payer may not be the user.</div>
+              {DEMOGRAPHIC_GROUPS.map((g) => (
+                <div key={g.id} style={{ marginBottom: 10 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#3a3a3e" }}>{g.label}</div>
+                  {g.desc && <div style={{ fontSize: 11, color: "#9a9aa0", marginBottom: 4 }}>{g.desc}</div>}
+                  <TagList items={segmentMap.demographics[g.id]} onRemove={(i) => removeDemographic(g.id, i)} color={BLOCKS.Constraints.color} />
+                  <TagAdder onAdd={(t) => addDemographic(g.id, t)} placeholder={`Add ${g.label.toLowerCase()}`} />
+                </div>
+              ))}
+
+              <div style={{ marginTop: 18, marginBottom: 4, fontSize: 12.5, fontWeight: 700, color: BLOCKS.Curiosity.ink }}>WHY they are here, the facets</div>
+              <div style={{ fontSize: 11.5, color: "#9a9aa0", marginBottom: 8, lineHeight: 1.4 }}>Find a belief they already hold. Never install one they do not.</div>
+              {FACET_FAMILIES.map((f) => (
+                <div key={f.id} style={{ marginBottom: 10 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#3a3a3e" }}>{f.label}</div>
+                  <div style={{ fontSize: 11, color: "#9a9aa0", marginBottom: 4 }}>{f.desc}</div>
+                  <TagList items={segmentMap.facets[f.id]} onRemove={(i) => removeFacet(f.id, i)} color={BLOCKS.Curiosity.color} />
+                  <TagAdder onAdd={(t) => addFacet(f.id, t)} placeholder={`Add a ${f.label.toLowerCase()} facet`} />
+                </div>
+              ))}
             </section>
 
             <div style={{ display: "flex", gap: 6, background: "#ececef", padding: 4, borderRadius: 10 }}>

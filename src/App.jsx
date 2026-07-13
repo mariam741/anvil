@@ -1325,7 +1325,7 @@ Return ONLY JSON, no fences:
             <section style={card}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
                 <h2 style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>Segment builder</h2>
-                <span style={{ fontSize: 11, color: "#9a9aa0" }}>in progress, milestone 1</span>
+                <span style={{ fontSize: 11, color: "#9a9aa0" }}>in progress, milestone 2 of 3</span>
               </div>
               <p style={{ margin: "0 0 12px", fontSize: 12.5, color: "#6b6b70", lineHeight: 1.5 }}>Slice one product into several distinct, real buyers, WHAT they want, WHO they are, WHY they are here, instead of one flat avatar. Held here in memory for now, not yet wired into generation. Ask at every entry: would a real customer say this out loud?</p>
 
@@ -2106,5 +2106,5 @@ function AvLine({ title, text, color }) {
       <div style={miniH(color)}>{title}</div>
       <div style={{ fontSize: 13, lineHeight: 1.5, color: "#1f1f22" }}>{text}</div>
     </div>
-  );
+  )
 }

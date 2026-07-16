@@ -48,20 +48,97 @@ const CTA_OPTIONS = ["Learn More", "Sign Up", "Get Offer", "Shop Now", "Subscrib
 const LEADGEN_CTAS = ["Book Now", "Get Quote", "Sign Up", "Contact Us", "Learn More", "Get Offer"];
 const SALES_CTAS = ["Shop Now", "Sign Up", "Subscribe", "Download", "Get Offer", "Learn More"];
 const OBJECTIVES = ["Lead generation", "Direct sale"];
-const VOICES = {
+// Awareness stage, the five rungs. Optional campaign setting: changes format/length
+// and which block leads, per the awareness spec. Empty means not set, generation
+// falls back to today's behavior with no awareness-specific guidance.
+const AWARENESS_STAGES = [
+  { id: "unaware", label: "Unaware", desc: "Does not know they have the problem.", guidance: "Lead with the Curiosity reframe, a discovery that surfaces the hidden problem or opportunity. Hold the offer and the Conditions block back, this is not the place for a hard CTA. Favor a slightly longer, story-led opening over a short direct pitch." },
+  { id: "problem", label: "Problem-aware", desc: "Feels the problem, does not know the solutions.", guidance: "Lead with Pain, naming the problem the way this market actually feels it, then move them toward your view of the root cause. Curiosity can introduce the mechanism. Keep the CTA soft, more learn-more than buy-now." },
+  { id: "solution", label: "Solution-aware", desc: "Knows solution types, not your offer.", guidance: "Lead with Curiosity or Promise, establishing why this specific approach is the right one, differentiated from other solution types they already know about. Proof should carry real weight here." },
+  { id: "product", label: "Product-aware", desc: "Knows your offer, not yet convinced.", guidance: "Lead with Promise or Proof, making this specific offer the obvious choice and building trust in it by name. The Constraints block should address the specific hesitation about choosing you, not the category." },
+  { id: "most", label: "Most aware", desc: "Ready, needs the deal and the call to action.", guidance: "Lead with the offer and Conditions. Be short and direct, most of the six blocks can compress or drop away. The call to action should be immediate and specific. Any urgency must be real, never manufactured." },
+];
+// Vertical language and compliance rules, extracted from the engine into a
+// standalone config, per Breyden's call in START_HERE_Segment_Builder.md:
+// keep these out of the hardcoded prompt strings, shaped so Anvil can later
+// read a shared vertical language profile from the Forge Market substrate
+// without changing how voiceLine()/complianceLine() consume it. Three
+// buckets per profile, matching that instruction's own wording: the allowed
+// and forbidden words (forbiddenTerms/forbiddenFrames), the tone (tone/
+// styleNotes), and the voice caps (insightRange/claimsRule).
+
+// Hard rules that apply to every voice and every generation prompt, not a
+// per-vertical style choice. Per CLAUDE.md: no em-dashes ever, never the
+// contrastive negation-then-restate construction. Kept separate from the
+// per-voice profiles below since a shared substrate profile would not need
+// to repeat these per vertical.
+const UNIVERSAL_SURFACE_RULES = [
+  "No em-dashes.",
+  "Never use the contrastive negation-then-restate construction (any subject, not just 'it': '[X] is not A, [it/that/X] is B', in one sentence or split across two sentences, such as '[X] is not A. It is B.').",
+];
+
+const VERTICAL_LANGUAGE_PROFILES = {
   "Plain & credible": {
     tag: "local SMBs, trust markets",
-    rule: "VOICE: plain, calm, and credible. Write at a fifth-grade reading level in short declarative sentences. Be concrete and specific. Lead with proof, time saved, and money or leads gained, not hype. No manufactured urgency or fake scarcity. No hype superlatives, clickbait, taboo, or shock framing. No em-dashes. Never use the contrastive negation-then-restate construction (any subject, not just 'it': '[X] is not A, [it/that/X] is B', in one sentence or split across two sentences, such as '[X] is not A. It is B.'). Keep Curiosity at a credible insight level (insight level about 5 to 7), never outlandish. Make no medical, legal, financial, or income claims you cannot substantiate. No Taboo Solution frames, no shock or taboo characterizations, and no idea caricatures.",
+    tone: "plain, calm, and credible",
+    styleNotes: "Write at a fifth-grade reading level in short declarative sentences. Be concrete and specific.",
+    leadWith: "proof, time saved, and money or leads gained, not hype",
+    forbiddenTerms: ["manufactured urgency or fake scarcity", "hype superlatives, clickbait, taboo, or shock framing"],
+    forbiddenFrames: ["Taboo Solution frames", "shock or taboo characterizations", "idea caricatures"],
+    insightRange: [5, 7], insightLabel: "credible",
+    claimsRule: "medical, legal, financial, or income claims you cannot substantiate",
   },
   "Ambitious & direct": {
     tag: "operators, agency builders",
-    rule: "VOICE: ambitious, direct, and credible, for an audience that is tired of gurus and burned by courses that never shipped. Energy is welcome, hype is not. No guru cliches (no 'six figures while you sleep', no 'secret loophole'). Every bold promise must be backed by specific proof. Favor real mechanics and specifics over spectacle. Keep Curiosity provable (insight level about 6 to 8). No em-dashes. Never use the contrastive negation-then-restate construction (any subject, not just 'it': '[X] is not A, [it/that/X] is B', in one sentence or split across two sentences, such as '[X] is not A. It is B.'). No Taboo Solution frames or shock characterizations.",
+    tone: "ambitious, direct, and credible, for an audience that is tired of gurus and burned by courses that never shipped",
+    styleNotes: "Energy is welcome, hype is not. Every bold promise must be backed by specific proof. Favor real mechanics and specifics over spectacle.",
+    leadWith: "",
+    forbiddenTerms: ["guru cliches (no 'six figures while you sleep', no 'secret loophole')"],
+    forbiddenFrames: ["Taboo Solution frames", "shock characterizations"],
+    insightRange: [6, 8], insightLabel: "provable",
+    claimsRule: "",
   },
   "Raw direct-response": {
     tag: "supplements, info, not local",
-    rule: "VOICE: classic aggressive direct-response, high curiosity and bold promises (insight level 6 to 9). No em-dashes. Never use the contrastive negation-then-restate construction (any subject, not just 'it': '[X] is not A, [it/that/X] is B', in one sentence or split across two sentences, such as '[X] is not A. It is B.'). Use only where the market expects it. Not appropriate for local services, health, legal, or finance.",
+    tone: "classic aggressive direct-response, high curiosity and bold promises",
+    styleNotes: "Use only where the market expects it. Not appropriate for local services, health, legal, or finance.",
+    leadWith: "",
+    forbiddenTerms: [],
+    forbiddenFrames: [],
+    insightRange: [6, 9], insightLabel: "",
+    claimsRule: "",
   },
 };
+
+// Composes the same kind of prompt-ready rule text the old hardcoded strings
+// held, from the structured profile above. Behavior should read the same to
+// the model, the data just is not one hardcoded paragraph anymore.
+function composeVoiceRule(profile) {
+  const bits = [`VOICE: ${profile.tone}.`];
+  if (profile.styleNotes) bits.push(profile.styleNotes);
+  if (profile.leadWith) bits.push(`Lead with ${profile.leadWith}.`);
+  (profile.forbiddenTerms || []).forEach((t) => bits.push(`No ${t}.`));
+  bits.push(...UNIVERSAL_SURFACE_RULES);
+  if (profile.insightRange) bits.push(`Keep Curiosity at a ${profile.insightLabel || "credible"} insight level (insight level about ${profile.insightRange[0]} to ${profile.insightRange[1]}), never outlandish.`);
+  if (profile.claimsRule) bits.push(`Make no ${profile.claimsRule}.`);
+  if (profile.forbiddenFrames && profile.forbiddenFrames.length) bits.push(`No ${profile.forbiddenFrames.join(", ")}.`);
+  return bits.join(" ");
+}
+
+// Same idea for the regulated-vertical compliance rule: structured profile,
+// composed into the prompt text, instead of one hardcoded string.
+const COMPLIANCE_PROFILE = {
+  verticals: ["health", "legal", "finance"],
+  forbiddenClaims: ["medical", "legal", "financial", "income"],
+  forbiddenContent: ["cures", "outcome guarantees", "before-and-after health imagery"],
+  substantiationRule: "State only what can be substantiated.",
+  sellInstead: "the free next step, not the result",
+  curiosityRule: "Keep curiosity credible, with no taboo or shock framing.",
+  reviewRule: "All output will be human-reviewed before spend.",
+};
+function composeComplianceLine(profile) {
+  return `\nCOMPLIANCE: This is a regulated vertical (${profile.verticals.join(", ")}). Make no ${profile.forbiddenClaims.join(", ")} claims. No ${profile.forbiddenContent.join(", ")}. ${profile.substantiationRule} Sell ${profile.sellInstead}. ${profile.curiosityRule} ${profile.reviewRule}`;
+}
 const AXES = ["Hook", "Headline", "Image headline", "CTA", "Angle (big idea)"];
 
 // Proof engine: 22 proof types across 5 categories, ranked by how hard each is to
@@ -352,6 +429,23 @@ function sanitizeJSONText(t) {
   }
   return out;
 }
+// The model still slips em-dashes into generated copy sometimes even though
+// the voice rule tells it not to, a well-known model tic that one prompt
+// instruction does not reliably stop (the same class of problem the banned
+// contrastive-negation construction was earlier this session). Rather than
+// re-wording the prompt again, scrub any that get through here, recursively,
+// wherever they land in the parsed result. Per CLAUDE.md's own house style,
+// a comma stands in for the em-dash.
+function stripEmDashes(value) {
+  if (typeof value === "string") return value.replace(/\s*\u2014\s*/g, ", ").replace(/,\s*,/g, ",");
+  if (Array.isArray(value)) return value.map(stripEmDashes);
+  if (value && typeof value === "object") {
+    const out = {};
+    for (const k in value) out[k] = stripEmDashes(value[k]);
+    return out;
+  }
+  return value;
+}
 function parseJSON(text) {
   let t = (text || "").trim().replace(/^```json/i, "").replace(/^```/, "").replace(/```$/, "").trim();
   const s = t.indexOf("{");
@@ -360,8 +454,8 @@ function parseJSON(text) {
     t = e > s ? t.slice(s, e + 1) : t.slice(s);
   }
   t = sanitizeJSONText(t);
-  try { return JSON.parse(t); }
-  catch (_) { return JSON.parse(repairJSON(t)); }
+  try { return stripEmDashes(JSON.parse(t)); }
+  catch (_) { return stripEmDashes(JSON.parse(repairJSON(t))); }
 }
 const stripQuoteMarks = (s) => String(s || "").replace(/^[\s"'“”‘’]+/, "").replace(/[\s"'“”‘’]+$/, "");
 const wordCount = (s) => (s || "").trim().split(/\s+/).filter(Boolean).length;
@@ -428,7 +522,7 @@ const OutcomeAdder = ({ onAdd }) => {
 
 export default function App() {
   const [mode, setMode] = useState("guided");
-  const [intake, setIntake] = useState({ core: "", niche: "", offer: "", audience: "", struggle: "", dream: "", hesitation: "", proof: "", corpus: "", brandName: "", domain: "", objective: "Lead generation", leadOffer: "", voice: "Plain & credible", regulated: false });
+  const [intake, setIntake] = useState({ core: "", niche: "", offer: "", audience: "", struggle: "", dream: "", hesitation: "", proof: "", corpus: "", brandName: "", domain: "", objective: "Lead generation", leadOffer: "", voice: "Plain & credible", regulated: false, awareness: "" });
   const [platform, setPlatform] = useState("Facebook");
   const [complianceAck, setComplianceAck] = useState(false);
   const [avatar, setAvatar] = useState(null);
@@ -472,6 +566,10 @@ export default function App() {
   useEffect(() => {
     try { window.localStorage.setItem(SEGMENT_STORAGE_KEY, JSON.stringify(segmentMap)); } catch (e) {}
   }, [segmentMap]);
+
+  // Milestone 3: which composed persona, if any, the generation flow is currently
+  // targeting. Null means generate the old way, from the single avatar.
+  const [activePersonaId, setActivePersonaId] = useState(null);
 
   const addOutcome = (name, lens) => {
     if (!name.trim()) return;
@@ -529,15 +627,30 @@ export default function App() {
     return TEMPLATES.find((t) => t.id === Number(templateId));
   }, [templateId, recommended]);
 
-  const blockText = () => Object.values(blocks).some((v) => v.trim()) ? BLOCK_NAMES.map((n) => `${n}: ${blocks[n] || "(infer)"}`).join("\n") : "(infer from offer and avatar)";
+  const blockText = () => Object.values(blocks).some((v) => v.trim()) ? BLOCK_NAMES.map((n) => `${n}: ${blocks[n] || "(infer)"}`).join("\n") : "(infer from the offer, and the target persona or avatar above)";
   const placementLine = (p) => FEED.includes(p) ? `This is a ${p} feed ad. Shape it to the real fields.` : `This is a ${p} video ad; primaryText is the on-screen script and the first segment is the on-screen hook.`;
-  const voiceLine = () => (VOICES[intake.voice] || VOICES["Plain & credible"]).rule;
-  const complianceLine = () => intake.regulated
-    ? "\nCOMPLIANCE: This is a regulated vertical (health, legal, or finance). Make no medical, legal, financial, or income claims. No cures, no outcome guarantees, no before-and-after health imagery. State only what can be substantiated. Sell the free next step, not the result. Keep curiosity credible, with no taboo or shock framing. All output will be human-reviewed before spend."
-    : "";
+  const voiceLine = () => composeVoiceRule(VERTICAL_LANGUAGE_PROFILES[intake.voice] || VERTICAL_LANGUAGE_PROFILES["Plain & credible"]);
+  const complianceLine = () => intake.regulated ? composeComplianceLine(COMPLIANCE_PROFILE) : "";
   const objectiveLine = () => (isLeadGen
     ? `OBJECTIVE: lead generation. The ad sells the NEXT STEP, not the purchase. The CTA and the Conditions block must offer the lead magnet: ${intake.leadOffer || "a free consult / inspection / quote"}. Do not try to close the sale inside the ad.`
     : `OBJECTIVE: direct sale. Drive the purchase with the CTA.`) + "\n" + voiceLine() + complianceLine();
+
+  // Milestone 3: awareness stage as a first-class input, alongside objective and
+  // voice. Empty means not set, in which case generation behaves exactly as
+  // before with no awareness-specific guidance.
+  const awarenessLine = () => {
+    const stage = AWARENESS_STAGES.find((s) => s.id === intake.awareness);
+    return stage ? `\nAWARENESS STAGE: ${stage.label}, ${stage.desc} ${stage.guidance}` : "";
+  };
+
+  // Milestone 3: which composed persona, if any, is targeted for this generation.
+  const activePersona = segmentMap.personas.find((p) => p.id === activePersonaId) || null;
+  const personaLine = () => {
+    if (!activePersona) return "";
+    const demoText = Object.values(activePersona.demographics || {}).filter(Boolean).join(", ");
+    const facetText = (activePersona.facets || []).map((f) => f.value).join(", ");
+    return `\nTARGET PERSONA: ${activePersona.name}. ${activePersona.description} Wants: ${activePersona.outcomeName}.${demoText ? " Who they are: " + demoText + "." : ""}${facetText ? " Why they are here: " + facetText + "." : ""} Shape the pain, the promise, and the hook to this specific person, not a generic version of the buyer. If an avatar is also present below, use it only for supporting proof and objections, this persona decides the angle.`;
+  };
 
   async function buildAvatar() {
     setError("");
@@ -597,20 +710,20 @@ You have real room here: up to 4 items per array, and a phrase can run a full se
 
   async function buildBlocks() {
     setError("");
-    if (!avatar) { setError("Build the avatar first."); return; }
+    if (!avatar && !activePersona) { setError("Build the avatar first, or select a persona from the segment builder."); return; }
     setBusy("blocks");
     try {
       const prompt =
 `Turn this researched avatar into the six blocks for the offer.
 OFFER: ${intake.offer}
-${objectiveLine()}
-AVATAR: ${JSON.stringify(avatar)}
+${objectiveLine()}${awarenessLine()}${personaLine()}
+${avatar ? "AVATAR: " + JSON.stringify(avatar) : "No full avatar on hand, work from the target persona above and the offer."}
 Per block, 1 to 3 sentences in the market's own language:
-- Pain: a layered pain (general -> specific -> in their life -> deep emotion); lean on high-frequency pains, the relationalImpact, and real quotes. Where it fits, name the villain so the pain is not the reader's fault.
-- Promise: a promise ladder toward the desire and the dreamOutcomes, framed as the result WITHOUT the things in wontDo.
-- Proof: use ONLY proofTrusted; soften where proofGaps exist, never fabricate.
-- Constraints: name the biggest blocking belief/objection, then dissolve or sidestep it by acknowledging it, wedging in a counterexample, then reframing. Use secondaryGain and wontDo to address the objection under the objection.
-- Curiosity: a fresh insight near the insight level; AVOID high-saturation angles; make it clearly different from what they triedBefore so it does not sound like the things that already failed them; name a mechanism if you can.
+- Pain: a layered pain (general -> specific -> in their life -> deep emotion)${avatar ? "; lean on high-frequency pains, the relationalImpact, and real quotes" : ", lean on the persona's facets for what is actually going on for them"}. Where it fits, name the villain so the pain is not the reader's fault.
+- Promise: a promise ladder toward the desire${avatar ? " and the dreamOutcomes" : ""}, framed as the result${avatar ? " WITHOUT the things in wontDo" : ""}${activePersona ? ", aimed at this persona's outcome specifically" : ""}.
+- Proof: ${avatar ? "use ONLY proofTrusted; soften where proofGaps exist, never fabricate." : "use only proof actually on hand; if none, say plainly that proof is a gap rather than inventing any."}
+- Constraints: name the biggest blocking belief/objection${activePersona ? " for this persona" : ""}, then dissolve or sidestep it by acknowledging it, wedging in a counterexample, then reframing.
+- Curiosity: a fresh insight near the insight level; AVOID high-saturation angles; name a mechanism if you can.
 - Conditions: one CTA wrapper that matches the objective.
 Return ONLY JSON, no fences:
 {"Pain":"","Promise":"","Proof":"","Constraints":"","Curiosity":"","Conditions":"","notes":{"Pain":"","Promise":"","Proof":"","Constraints":"","Curiosity":"","Conditions":""}}`;
@@ -1044,12 +1157,14 @@ Return ONLY JSON, no fences:
 
   function makeAd(j, extra) {
     const segs = Array.isArray(j.primaryText) ? j.primaryText.filter((s) => s && s.text) : [];
+    const awStage = AWARENESS_STAGES.find((s) => s.id === intake.awareness);
     return {
       kind: "ad", platform, brand, domain, objective: intake.objective, template: activeTemplate,
       primaryText: segs, headline: j.headline || "", description: j.description || "",
       cta: CTA_OPTIONS.includes(j.cta) ? j.cta : ctaList[0], imageHeadline: j.imageHeadline || "", imageSubline: j.imageSubline || "",
       craves: j.craves || {}, hooks: Array.isArray(j.hooks) ? j.hooks.slice(0, 3) : [], creativeBrief: j.creativeBrief || "",
       copyVelocity: cv(segs), words: segs.reduce((a, s) => a + wordCount(s.text), 0),
+      personaName: activePersona ? activePersona.name : "", awarenessLabel: awStage ? awStage.label : "",
       ...extra,
     };
   }
@@ -1069,7 +1184,7 @@ Return ONLY JSON, no fences:
 `You are an elite direct-response copywriter producing a ${platform} ad in the Anvil framework, shaped to the platform's fields.
 OFFER: ${intake.offer}
 MARKET: ${intake.audience || "infer"}
-${objectiveLine()}
+${objectiveLine()}${awarenessLine()}${personaLine()}
 ${avatar ? "AVATAR: " + JSON.stringify(avatar) : ""}
 COPY BLOCKS:
 ${blockText()}
@@ -1108,7 +1223,7 @@ craves 1-5. Exactly 3 hooks.`;
 OFFER: ${intake.offer}
 MARKET: ${intake.audience || "infer"}
 BRAND: ${brand}
-${objectiveLine()}
+${objectiveLine()}${awarenessLine()}${personaLine()}
 ${avatar ? "AVATAR: " + JSON.stringify(avatar) : ""}
 COPY BLOCKS:
 ${blockText()}
@@ -1121,11 +1236,13 @@ Respect every character limit. Return ONLY JSON, no fences:
 {"headlines":["",""],"descriptions":["","","",""],"paths":["",""]}`;
       const out = await callClaude(prompt);
       const j = parseJSON(out);
+      const awStage = AWARENESS_STAGES.find((s) => s.id === intake.awareness);
       setResults((r) => [{
         kind: "rsa", id: Date.now(), platform: "Google Search", brand, domain, objective: intake.objective,
         headlines: (Array.isArray(j.headlines) ? j.headlines : []).filter(Boolean).slice(0, 15),
         descriptions: (Array.isArray(j.descriptions) ? j.descriptions : []).filter(Boolean).slice(0, 4),
         paths: (Array.isArray(j.paths) ? j.paths : []).filter(Boolean).slice(0, 2),
+        personaName: activePersona ? activePersona.name : "", awarenessLabel: awStage ? awStage.label : "",
       }, ...r]);
       markDone("generate"); scrollResults();
     } catch (e) { setError("Could not build the search ads. " + ((e && e.message) || "Unknown error") + ". Try again."); }
@@ -1153,7 +1270,7 @@ Respect every character limit. Return ONLY JSON, no fences:
 `You are running a single-variable A/B test of ${n} ad variants for a ${platform} ad in the Anvil framework.
 OFFER: ${intake.offer}
 MARKET: ${intake.audience || "infer"}
-${objectiveLine()}
+${objectiveLine()}${awarenessLine()}${personaLine()}
 ${avatar ? "AVATAR: " + JSON.stringify(avatar) : ""}
 COPY BLOCKS:
 ${blockText()}
@@ -1171,7 +1288,7 @@ Return ONLY JSON, no fences:
       const variants = (Array.isArray(j.variants) ? j.variants : []).map((v, i) => ({
         id: Date.now() + i + 1, ...makeAd(v, { label: v.label || String.fromCharCode(65 + i), note: v.note || "", isControl: i === 0 }),
       }));
-      setResults((r) => [{ kind: "test", id: Date.now(), platform, variable: j.variable || axis, hypothesis: j.hypothesis || "", metric: j.metric || "", nextTest: j.nextTest || "", variants }, ...r]);
+      setResults((r) => [{ kind: "test", id: Date.now(), platform, variable: j.variable || axis, hypothesis: j.hypothesis || "", metric: j.metric || "", nextTest: j.nextTest || "", variants, personaName: activePersona ? activePersona.name : "" }, ...r]);
       markDone("test"); scrollResults();
     } catch (e) { setError("Could not build the test set. " + ((e && e.message) || "Unknown error") + ". Try fewer variants, or try again."); }
     finally { setBusy(""); }
@@ -1325,7 +1442,7 @@ Return ONLY JSON, no fences:
             <section style={card}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
                 <h2 style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>Segment builder</h2>
-                <span style={{ fontSize: 11, color: "#9a9aa0" }}>in progress, milestone 2 of 3</span>
+                <span style={{ fontSize: 11, color: "#9a9aa0" }}>milestone 3, wired into generation</span>
               </div>
               <p style={{ margin: "0 0 12px", fontSize: 12.5, color: "#6b6b70", lineHeight: 1.5 }}>Slice one product into several distinct, real buyers, WHAT they want, WHO they are, WHY they are here, instead of one flat avatar. Held here in memory for now, not yet wired into generation. Ask at every entry: would a real customer say this out loud?</p>
 
@@ -1381,24 +1498,31 @@ Return ONLY JSON, no fences:
                 <p style={{ margin: "0 0 10px", fontSize: 12, color: "#9a9aa0", lineHeight: 1.45 }}>Each persona is one outcome plus who they are plus one or two facets. No score, no ranking, delete what does not land.</p>
                 {segmentMap.personas.length > 0 && (
                   <div>
-                    {segmentMap.personas.map((p) => (
-                      <div key={p.id} style={{ border: "1px solid #ececef", borderRadius: 10, padding: 10, marginBottom: 8 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
-                          <span style={{ fontWeight: 800, fontSize: 13.5 }}>{p.name}</span>
-                          <span onClick={() => removePersona(p.id)} style={{ cursor: "pointer", color: "#9a9aa0", fontWeight: 700 }}>×</span>
+                    {activePersona && (
+                      <div style={{ fontSize: 12, color: "#1B7A43", fontWeight: 700, marginBottom: 8 }}>Targeting {activePersona.name} for generation below. <span style={{ cursor: "pointer", textDecoration: "underline", fontWeight: 700 }} onClick={() => setActivePersonaId(null)}>Clear</span></div>
+                    )}
+                    {segmentMap.personas.map((p) => {
+                      const isActive = p.id === activePersonaId;
+                      return (
+                        <div key={p.id} style={{ border: isActive ? "2px solid #1B7A43" : "1px solid #ececef", borderRadius: 10, padding: 10, marginBottom: 8, background: isActive ? "#f3faf5" : "#fff" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
+                            <span style={{ fontWeight: 800, fontSize: 13.5 }}>{p.name}</span>
+                            <span onClick={() => removePersona(p.id)} style={{ cursor: "pointer", color: "#9a9aa0", fontWeight: 700 }}>×</span>
+                          </div>
+                          <div style={{ fontSize: 12.5, color: "#3a3a3e", lineHeight: 1.45, marginBottom: 6 }}>{p.description}</div>
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 8 }}>
+                            <Chip text={p.outcomeName} color={BLOCKS.Promise.color} />
+                            {Object.entries(p.demographics).map(([groupId, val]) => (
+                              <Chip key={groupId} text={val} color={BLOCKS.Constraints.color} />
+                            ))}
+                            {p.facets.map((f, i) => (
+                              <Chip key={i} text={f.value} color={BLOCKS.Curiosity.color} />
+                            ))}
+                          </div>
+                          <button style={{ ...btnGhost, padding: "5px 10px", fontSize: 11.5, ...(isActive ? { background: "#1B7A43", border: "1px solid #1B7A43", color: "#fff" } : {}) }} onClick={() => setActivePersonaId(isActive ? null : p.id)}>{isActive ? "Targeting this persona" : "Generate for this persona"}</button>
                         </div>
-                        <div style={{ fontSize: 12.5, color: "#3a3a3e", lineHeight: 1.45, marginBottom: 6 }}>{p.description}</div>
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
-                          <Chip text={p.outcomeName} color={BLOCKS.Promise.color} />
-                          {Object.entries(p.demographics).map(([groupId, val]) => (
-                            <Chip key={groupId} text={val} color={BLOCKS.Constraints.color} />
-                          ))}
-                          {p.facets.map((f, i) => (
-                            <Chip key={i} text={f.value} color={BLOCKS.Curiosity.color} />
-                          ))}
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -1460,7 +1584,7 @@ Return ONLY JSON, no fences:
                   <div><label style={label}>Website</label><input style={field} value={intake.domain} onChange={(e) => setIn("domain", e.target.value)} placeholder="yourbrand.com" /></div>
                 </div>
                 <div style={{ height: 10 }} />
-                <div style={{ marginBottom: 10 }}><label style={label}>Brand voice</label><select style={field} value={intake.voice} onChange={(e) => setIn("voice", e.target.value)}>{Object.keys(VOICES).map((v) => <option key={v} value={v}>{v} · {VOICES[v].tag}</option>)}</select></div>
+                <div style={{ marginBottom: 10 }}><label style={label}>Brand voice</label><select style={field} value={intake.voice} onChange={(e) => setIn("voice", e.target.value)}>{Object.keys(VERTICAL_LANGUAGE_PROFILES).map((v) => <option key={v} value={v}>{v} · {VERTICAL_LANGUAGE_PROFILES[v].tag}</option>)}</select></div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                   <div><label style={label}>Objective</label><select style={field} value={intake.objective} onChange={(e) => setIn("objective", e.target.value)}>{OBJECTIVES.map((o) => <option key={o}>{o}</option>)}</select></div>
                   <div><label style={label}>Placement</label><select style={field} value={platform} onChange={(e) => setPlatform(e.target.value)}>{PLATFORMS.map((p) => <option key={p}>{p}</option>)}</select></div>
@@ -1472,6 +1596,14 @@ Return ONLY JSON, no fences:
                     <div style={{ fontSize: 11, color: "#9a9aa0", marginTop: 4 }}>The CTA sells this, not the purchase.</div>
                   </div>
                 )}
+                <div style={{ marginTop: 10 }}>
+                  <label style={label}>Awareness stage, optional</label>
+                  <select style={field} value={intake.awareness} onChange={(e) => setIn("awareness", e.target.value)}>
+                    <option value="">Not set, generate as before</option>
+                    {AWARENESS_STAGES.map((s) => <option key={s.id} value={s.id}>{s.label} · {s.desc}</option>)}
+                  </select>
+                  <div style={{ fontSize: 11, color: "#9a9aa0", marginTop: 4 }}>Changes which block leads and how direct the call to action is. Colder stages hold the offer back, warmer stages lead with it.</div>
+                </div>
                 <div style={{ marginTop: 12, padding: "10px 12px", background: "#fbfbfc", border: "1px solid #ececef", borderRadius: 8 }}>
                   <label style={{ display: "flex", gap: 8, alignItems: "flex-start", cursor: "pointer", fontSize: 13, color: "#1c1e21" }}>
                     <input type="checkbox" checked={!!intake.regulated} onChange={(e) => setIn("regulated", e.target.checked)} style={{ marginTop: 2 }} />
@@ -1564,8 +1696,13 @@ Return ONLY JSON, no fences:
             )}
 
             <section style={card}>
-              <h2 style={{ margin: "0 0 4px", fontSize: 16, fontWeight: 800 }}>{step(3)}The blocks</h2>
-              <p style={{ margin: "0 0 14px", fontSize: 12.5, color: "#6b6b70" }}>Pre-filled and editable. Each block names the framework it came from.</p>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
+                <h2 style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>{step(3)}The blocks</h2>
+                {(avatar || activePersona) && (
+                  <button style={btnState("blocks", { ...btnGhost, padding: "6px 10px", fontSize: 12 })} onClick={buildBlocks} disabled={busy === "blocks"}>{busy === "blocks" ? <><Spinner /> Deriving</> : activePersona ? `Build for ${activePersona.name}` : "Build my blocks from this"}</button>
+                )}
+              </div>
+              <p style={{ margin: "0 0 14px", fontSize: 12.5, color: "#6b6b70" }}>Pre-filled and editable. Each block names the framework it came from.{activePersona ? " Targeting " + activePersona.name + ", re-run this after switching personas so the blocks actually change." : ""}</p>
               {BLOCK_NAMES.map((n) => (
                 <div key={n} style={{ marginBottom: 12 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
@@ -1895,7 +2032,7 @@ function RsaCard({ r }) {
   return (
     <article style={{ background: "#fff", border: "1px solid #ececef", borderRadius: 14, padding: 16 }}>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "#9a9aa0" }}>Google Search · Responsive Search Ad</div>
+        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "#9a9aa0" }}>Google Search · Responsive Search Ad{r.personaName ? " · " + r.personaName : ""}{r.awarenessLabel ? " · " + r.awarenessLabel : ""}</div>
         <div style={{ display: "flex", gap: 6 }}>
           <button style={ctl} onClick={() => copy((r.headlines || []).join("\n"))}>Copy headlines</button>
           <button style={ctl} onClick={() => copy((r.descriptions || []).join("\n"))}>Copy descriptions</button>
@@ -1928,7 +2065,7 @@ function TestSetView({ t }) {
   const planH = { fontSize: 10, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase", color: "#9a9aa0", marginBottom: 3 };
   return (
     <article style={{ background: "#fff", border: "1px solid #ececef", borderRadius: 14, padding: 16 }}>
-      <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "#8E3B8E", marginBottom: 4 }}>A/B test · {t.platform}</div>
+      <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "#8E3B8E", marginBottom: 4 }}>A/B test · {t.platform}{t.personaName ? " · " + t.personaName : ""}</div>
       <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: "-.01em", marginBottom: 12 }}>Testing the {String(t.variable).toLowerCase()} · {t.variants.length} variants</div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 8, marginBottom: 14 }}>
         {t.hypothesis && <div style={plan}><div style={planH}>Hypothesis</div><div style={{ fontSize: 13, color: "#1f1f22", lineHeight: 1.45 }}>{t.hypothesis}</div></div>}
@@ -1994,7 +2131,7 @@ function AdPreview({ r, nested }) {
         </div>
       )}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "#9a9aa0" }}>{r.platform}{r.template ? " · " + r.template.name : ""}{r.objective ? " · " + (r.objective === "Lead generation" ? "Lead gen" : "Sale") : ""}</div>
+        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "#9a9aa0" }}>{r.platform}{r.template ? " · " + r.template.name : ""}{r.objective ? " · " + (r.objective === "Lead generation" ? "Lead gen" : "Sale") : ""}{r.personaName ? " · " + r.personaName : ""}{r.awarenessLabel ? " · " + r.awarenessLabel : ""}</div>
         <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
           <button style={ctl} onClick={() => setShowBlocks((s) => !s)}>{showBlocks ? "Hide" : "Show"} blocks</button>
           {isFeed && <button style={ctl} onClick={() => setAnatomy((s) => !s)}>{anatomy ? "Hide" : "Show"} anatomy</button>}

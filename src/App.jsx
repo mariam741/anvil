@@ -697,7 +697,7 @@ RESEARCH: ${JSON.stringify(research)}
 ${context}
 ${voiceLine()}${complianceLine()}
 
-Reframe every field for THIS market, not generic infomarketing. The villain is a market force or system, never a person the reader loves. Relational impact means staff, partners, family in the business, reputation, and customers, framed honestly, not cruelly. No vanity or shock framing.
+Reframe every field for THIS market, not generic infomarketing. The villain is a market force or system, never a person the reader loves. Relational impact means staff, partners, family in the business, reputation, and customers, framed plainly, not cruelly. No vanity or shock framing.
 
 You have real room here: up to 4 items per array, and a phrase can run a full sentence when it earns its place. Do not pad or invent to fill space. Return ONLY valid JSON, no fences: escape any quote marks inside a string as \", and never put a literal line break inside a string value.
 {"confidence":"high|medium|low","coverage":"one line on corpus vs inference","pains":[{"text":"","type":"psychological|physiological|social|measurable","frequency":"high|medium|low","quote":"<=20 words or empty, the words only, no surrounding quote marks"}],"relationalImpact":["how the problem shows up with staff, family, reputation, or customers"],"desire":"the promised land in one line","dreamOutcomes":["concrete, specific outcomes if it were fully solved"],"coreWound":"","fears":["deep, mostly unspoken fears"],"beliefs":[""],"constraints":{"Money":"","Time":"","Effort":""},"objections":[""],"triedBefore":[{"tried":"a prior solution they tried","whyFailed":"why it let them down"}],"wontDo":["what they refuse to do to fix it"],"villain":"the outside force they blame, a market force or system, not a person","secondaryGain":"what they quietly lose or give up by solving it","proofTrusted":[""],"proofGaps":[""],"marketAngles":[{"angle":"","saturation":"high|medium|low"}],"voice":[""]}`;
@@ -781,7 +781,7 @@ ${voiceLine()}${complianceLine()}
 You will be given an offer, a promise or dream outcome, and the proof already on hand. Identify 2 to 4 specific claims or promises being made, pulled only from what you are given, do not invent new claims. For each claim, pick the single best-fitting proof type from this closed list, using the id exactly as written:
 ${typesList}
 
-Rules: match proof strength to the size of the claim; a bold or specific promise needs a harder-to-fake proof type when one is available, a modest claim can use a lighter one. Only draft proofText from what is actually in the proof on hand, never invent a testimonial, a number, or a credential that was not given. If nothing on hand actually backs a claim, set gap to true and leave proofText thin or empty rather than making something up. Prefer psychological proof types when they genuinely fit, since this category is underused, but never force one.
+Rules: match proof strength to the size of the claim; a bold or specific promise needs a harder-to-fake proof type when one is available, a modest claim can use a lighter one. Only draft proofText from what is actually in the proof on hand, never invent a testimonial, a number, or a credential that was not given. If nothing on hand actually backs a claim, set gap to true and leave proofText thin or empty rather than making something up. Prefer psychological proof types when they fit, since this category is underused, but never force one.
 
 Return ONLY valid JSON, no fences: escape any quote marks inside a string as \", and never put a literal line break inside a string value.
 {"pairings":[{"claim":"the specific claim or promise","proofTypeId":"one of the ids above","proofText":"one sentence using only real material on hand, or empty if gap is true","gap":false}]}`;
@@ -857,7 +857,7 @@ ${voiceLine()}${complianceLine()}
 Curiosity lives in the gap between what the market already believes and what you actually see. For each of these 4 fixed quadrants, using the id exactly as written, write one short angle:
 ${quadrantList}
 
-The two "what people already believe" quadrants should sound like the common, saturated take, the thing every competitor already says. The two "what you see differently" quadrants are the actual differentiator, write a genuinely different, specific angle, not a rephrase of the common one, grounded in the pain and promise above, not invented from nothing. Avoid any angle that resembles what they have tried before or what is already saturated in the market angles list. Do not use a Taboo Solution frame, a shock or taboo characterization, or an idea caricature, in any quadrant, regardless of voice. Keep every angle something you could say to this client's face without flinching.
+The two "what people already believe" quadrants should sound like the common, saturated take, the thing every competitor already says. The two "what you see differently" quadrants are the actual differentiator, write a different, specific angle, not a rephrase of the common one, grounded in the pain and promise above, not invented from nothing. Avoid any angle that resembles what they have tried before or what is already saturated in the market angles list. Do not use a Taboo Solution frame, a shock or taboo characterization, or an idea caricature, in any quadrant, regardless of voice. Keep every angle something you could say to this client's face without flinching.
 
 Also name up to 2 characterizations: a plain, specific name for a mechanism or step in how the offer works, the kind of naming that makes a process feel concrete and ownable. Example of the right register: "same-day roof report," not a gimmick name and not a hype name.
 
@@ -904,7 +904,7 @@ Then write 3 names for the real mechanism above, at three different levels of ho
 - evocative: hints at the benefit or mechanism without spelling it out fully
 - abstract: a short, memorable name that reveals little on its own and needs the ad copy around it to explain it
 
-Then, from the objections given above, exclude any objection about price, cost, subscriptions, contracts, refunds, or guarantees, those need a real number or policy to defuse honestly and this is not the place to invent one. From what remains, the objections about how the product works, sounds, or feels, write up to 2 names that bake that objection's answer directly into the name itself, so the name defuses it before anyone has to argue with it. Only use a fact already stated in the OFFER or PROMISE material above, never invent a capability, a feature, or a mechanism to sound like a good answer. It is fine to return fewer than 2, or none, if nothing qualifies.
+Then, from the objections given above, exclude any objection about price, cost, subscriptions, contracts, refunds, or guarantees, those need a real number or policy to defuse, and this is not the place to invent one. From what remains, the objections about how the product works, sounds, or feels, write up to 2 names that bake that objection's answer directly into the name itself, so the name defuses it before anyone has to argue with it. Only use a fact already stated in the OFFER or PROMISE material above, never invent a capability, a feature, or a mechanism to sound like a good answer. It is fine to return fewer than 2, or none, if nothing qualifies.
 
 Do not use a Taboo Solution frame, a shock or taboo characterization, or an idea caricature, in any of the above, regardless of voice. Nothing should be gimmicky, cute at the expense of clarity, or drift into a health, legal, or financial claim.
 
@@ -973,7 +973,7 @@ ${voiceLine()}${complianceLine()}
 For each of these 5 fixed types, using the id exactly as written, each type exactly once, no repeats and none skipped:
 ${typesList}
 
-Hard rule regardless of voice: never invent a deadline, a limited quantity, a guarantee, a bonus, or a term that is not actually stated in the material above. No manufactured urgency and no fake scarcity of any kind, in any type, in any voice. If the material above genuinely supports a type, write one real, specific sentence for it and set gap to false. If it does not, set gap to true, leave text empty, and instead write a short, specific question in askFor naming exactly the real fact you would need to fill it in, for example asking what the actual refund policy is, or whether there is a real deadline or limited capacity.
+Hard rule regardless of voice: never invent a deadline, a limited quantity, a guarantee, a bonus, or a term that is not actually stated in the material above. No manufactured urgency and no fake scarcity of any kind, in any type, in any voice. If the material above supports a type, write one real, specific sentence for it and set gap to false. If it does not, set gap to true, leave text empty, and instead write a short, specific question in askFor naming exactly the real fact you would need to fill it in, for example asking what the actual refund policy is, or whether there is a real deadline or limited capacity.
 
 Return ONLY valid JSON, no fences: escape any quote marks inside a string as \", and never put a literal line break inside a string value.
 {"conditions":[{"typeId":"one of the 5 ids above","text":"the real, specific sentence, or empty if gap is true","gap":false,"askFor":"the specific question to ask, or empty if gap is false"}]}`;
@@ -1014,7 +1014,7 @@ The value of an offer comes down to 5 factors: Promise times Proof times Curiosi
 For each of these 5 fixed factors, using the id exactly as written, each factor exactly once, no repeats and none skipped:
 ${factorList}
 
-Assess only using what is actually given above, never invent a detail about the offer that was not stated. If there is genuinely not enough material yet to assess a factor, set gap to true, leave assessment empty, and write a short, specific question in askFor naming exactly what you would need to know. Otherwise set gap to false, write one or two sentences on what is currently strong or thin about that factor, and one concrete, specific suggestion for tightening it.
+Assess only using what is actually given above, never invent a detail about the offer that was not stated. If there is not enough material yet to assess a factor, set gap to true, leave assessment empty, and write a short, specific question in askFor naming exactly what you would need to know. Otherwise set gap to false, write one or two sentences on what is currently strong or thin about that factor, and one concrete, specific suggestion for tightening it.
 
 Then write one closing sentence in biggestLever naming which single factor is the most worth fixing before writing copy, and why, grounded in what you actually assessed above.
 
@@ -1079,9 +1079,9 @@ Apply two tests to every candidate before keeping it:
 - The say-it test. Would a real customer say this out loud, as who they are and what they want? If it reads like a marketer's abstraction, drop it.
 - The gate. Only keep a persona if it would need a meaningfully different ad than every other persona you keep. If two candidates would run the same ad, they are the same persona, merge them into one or drop the redundant one.
 
-The power move is stacking two facets from different families to find a real pocket nobody targets, for example a retiree who is also afraid of the procedure, not just a retiree. Only stack two facets when it is a genuinely different, real group of people, not a more specific description of the same one persona.
+The power move is stacking two facets from different families to find a real pocket nobody targets, for example a retiree who is also afraid of the procedure, not just a retiree. Only stack two facets when it is a clearly different, real group of people, not a more specific description of the same one persona.
 
-Return between 2 and 6 personas, only as many as genuinely pass the gate. Fewer strong personas beats many overlapping ones. Give each a short, plain, natural name a strategist would actually use, not a joke name or a caricature, and a one-line description a real person in this group might recognize themselves in.
+Return between 2 and 6 personas, only as many as actually pass the gate. Fewer strong personas beats many overlapping ones. Give each a short, plain, natural name a strategist would actually use, not a joke name or a caricature, and a one-line description a real person in this group might recognize themselves in.
 
 Return ONLY valid JSON, no fences: escape any quote marks inside a string as \", and never put a literal line break inside a string value.
 {"personas":[{"name":"...","description":"one sentence","outcomeName":"the exact outcome name from the list above","demographics":{"groupId":"one exact value from that group's list"},"facets":[{"familyId":"...","value":"one exact value from that family's list"}]}]}`;

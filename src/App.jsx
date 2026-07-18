@@ -906,7 +906,7 @@ Then write 3 names for the real mechanism above, at three different levels of ho
 
 Then, from the objections given above, exclude any objection about price, cost, subscriptions, contracts, refunds, or guarantees, those need a real number or policy to defuse, and this is not the place to invent one. From what remains, the objections about how the product works, sounds, or feels, write up to 2 names that bake that objection's answer directly into the name itself, so the name defuses it before anyone has to argue with it. Only use a fact already stated in the OFFER or PROMISE material above, never invent a capability, a feature, or a mechanism to sound like a good answer. It is fine to return fewer than 2, or none, if nothing qualifies.
 
-Do not use a Taboo Solution frame, a shock or taboo characterization, or an idea caricature, in any of the above, regardless of voice. Nothing should be gimmicky, cute at the expense of clarity, or drift into a health, legal, or financial claim.
+Do not use a Taboo Solution frame, a shock or taboo characterization, or an idea caricature, in any of the above, regardless of voice. Never invent a statistic, a study, a cited research finding, or a named authority not given in the material above, in any of the above. Nothing should be gimmicky, cute at the expense of clarity, or drift into a health, legal, or financial claim.
 
 Return ONLY valid JSON, no fences: escape any quote marks inside a string as \", and never put a literal line break inside a string value.
 {"intuitionPumps":[{"type":"natural|mechanical|force|association","metaphor":"one to two sentences"}],"evocativeNames":[{"level":"descriptive|evocative|abstract","name":"the name"}],"antiConstraintNames":[{"objection":"the objection answered","name":"the name"}]}`;
@@ -1440,11 +1440,8 @@ Return ONLY JSON, no fences:
             </section>
 
             <section style={card}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
-                <h2 style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>Segment builder</h2>
-                <span style={{ fontSize: 11, color: "#9a9aa0" }}>milestone 3, wired into generation</span>
-              </div>
-              <p style={{ margin: "0 0 12px", fontSize: 12.5, color: "#6b6b70", lineHeight: 1.5 }}>Slice one product into several distinct, real buyers, WHAT they want, WHO they are, WHY they are here, instead of one flat avatar. Held here in memory for now, not yet wired into generation. Ask at every entry: would a real customer say this out loud?</p>
+              <h2 style={{ margin: "0 0 4px", fontSize: 16, fontWeight: 800 }}>Segment builder</h2>
+              <p style={{ margin: "0 0 12px", fontSize: 12.5, color: "#6b6b70", lineHeight: 1.5 }}>Slice one product into several distinct, real buyers, WHAT they want, WHO they are, WHY they are here, instead of one flat avatar. Held here in memory for now. Ask at every entry: would a real customer say this out loud?</p>
 
               <label style={label}>Scope, which brand or client this belongs to</label>
               <input style={field} value={segmentMap.scope} onChange={(e) => setSegmentMap((s) => ({ ...s, scope: e.target.value }))} placeholder="e.g. Cary Dental, implants" />

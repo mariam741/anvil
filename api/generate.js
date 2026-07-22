@@ -13,6 +13,20 @@ export default async function handler(req, res) {
   }
 
   try {
+    // Interim access gate, added ahead of real auth (Supabase, still pending).
+    // The production URL has no login in front of it yet, so without this check
+    // anyone who finds the URL could call this endpoint directly and run up real
+    // Anthropic spend with no rate limit. Requires APP_ACCESS_CODE to be set on
+    // the server; the app asks the visitor for it once per browser session and
+    // sends it back on every call. Remove this block once real auth ships.
+    if (!process.env.APP_ACCESS_CODE) {
+      return res.status(500).json({ error: "Server is missing APP_ACCESS_CODE" });
+    }
+    const suppliedCode = req.headers["x-app-passcode"];
+    if (suppliedCode !== process.env.APP_ACCESS_CODE) {
+      return res.status(401).json({ error: "Missing or incorrect access code" });
+    }
+
     const body = typeof req.body === "string" ? JSON.parse(req.body) : (req.body || {});
     const prompt = body.prompt;
     // We own the ceiling. 1500 fixes the avatar truncation. Cap it so nobody abuses it.
@@ -38,7 +52,10 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: "Server is missing ANTHROPIC_API_KEY" });
     }
 
-    // TODO before public launch: rate limit and auth here. See Anvil_Backend_README.md.
+    // TODO before public launch: real per-user auth and rate limiting still needed
+    // (Supabase, planned). The shared passcode above is an interim block only, it
+    // stops an anonymous stranger, not abuse by someone who has the code. See
+    // Anvil_Backend_README.md.
 
     const upstream = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",

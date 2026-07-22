@@ -230,6 +230,12 @@ const LEVER_CHECKLIST = {
   ],
 };
 const LEVER_CHECKLIST_STORAGE_KEY = "anvil_lever_checklist_checked";
+// Interim access gate, session-only on purpose so it does not silently persist
+// past a closed tab. Remove alongside the api/generate.js check once real auth ships.
+const ACCESS_CODE_STORAGE_KEY = "anvil_access_code";
+function getStoredAccessCode() {
+  try { return window.sessionStorage.getItem(ACCESS_CODE_STORAGE_KEY) || ""; } catch (e) { return ""; }
+}
 
 // Segment builder (WHAT, WHO, WHY). Milestone 1 only: capture the three input
 // layers and hold them in memory, shaped to match the segment entity in the
@@ -342,7 +348,7 @@ async function callClaude(prompt, maxTokens = 1500, system = null) {
     try {
       res = await fetch("/api/generate", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-app-passcode": getStoredAccessCode() },
         body: JSON.stringify({ prompt, max_tokens: maxTokens, ...(system ? { system } : {}) }),
         signal: controller.signal,
       });
@@ -357,6 +363,10 @@ async function callClaude(prompt, maxTokens = 1500, system = null) {
       clearTimeout(timer);
     }
     if (!res.ok) {
+      if (res.status === 401) {
+        try { window.sessionStorage.removeItem(ACCESS_CODE_STORAGE_KEY); } catch (e) {}
+        throw new Error("Incorrect access code. Refresh the page and enter it again.");
+      }
       const transient = [429, 500, 502, 503, 529].includes(res.status);
       if (transient && attempt === 0) { await new Promise((r) => setTimeout(r, 1200)); continue; }
       let detail = "";
@@ -521,6 +531,10 @@ const OutcomeAdder = ({ onAdd }) => {
 
 
 export default function App() {
+  // Interim access gate. Session-only: closing the tab clears it, matching the
+  // fact this is a stopgap ahead of real auth, not a persistent login.
+  const [accessCode, setAccessCode] = useState(() => getStoredAccessCode());
+  const [accessCodeInput, setAccessCodeInput] = useState("");
   const [mode, setMode] = useState("guided");
   const [intake, setIntake] = useState({ core: "", niche: "", offer: "", audience: "", struggle: "", dream: "", hesitation: "", proof: "", corpus: "", brandName: "", domain: "", objective: "Lead generation", leadOffer: "", voice: "Plain & credible", regulated: false, awareness: "" });
   const [platform, setPlatform] = useState("Facebook");
@@ -1313,6 +1327,35 @@ Return ONLY JSON, no fences:
     { k: "proof", q: "What proof do you have?", ph: "Results, testimonials, credentials, data, guarantees. Optional.", min: 48 },
   ];
   const conf = avatar && CONF[avatar.confidence] ? CONF[avatar.confidence] : CONF.low;
+
+  if (!accessCode) {
+    return (
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f6f6f7", fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            const v = accessCodeInput.trim();
+            if (!v) return;
+            try { window.sessionStorage.setItem(ACCESS_CODE_STORAGE_KEY, v); } catch (err) {}
+            setAccessCode(v);
+          }}
+          style={{ background: "#fff", border: "1px solid #ececef", borderRadius: 14, padding: 28, width: 320, boxSizing: "border-box" }}
+        >
+          <h2 style={{ margin: "0 0 8px", fontSize: 18, fontWeight: 800, color: "#141414" }}>Anvil</h2>
+          <p style={{ margin: "0 0 16px", fontSize: 13, color: "#6b6b70", lineHeight: 1.5 }}>This build is not public yet. Enter the access code to continue.</p>
+          <input
+            type="password"
+            autoFocus
+            value={accessCodeInput}
+            onChange={(e) => setAccessCodeInput(e.target.value)}
+            placeholder="Access code"
+            style={{ width: "100%", boxSizing: "border-box", border: "1px solid #e2e2e6", borderRadius: 8, padding: "10px 12px", fontSize: 14, marginBottom: 12 }}
+          />
+          <button type="submit" style={{ width: "100%", fontFamily: "inherit", fontWeight: 700, fontSize: 13, borderRadius: 8, padding: "10px 14px", cursor: "pointer", border: "1px solid #141414", background: "#141414", color: "#fff" }}>Continue</button>
+        </form>
+      </div>
+    );
+  }
 
   return (
     <div style={{ fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif", color: "#141414", background: "#f6f6f7", minHeight: "100vh", padding: "0 0 64px" }}>

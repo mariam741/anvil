@@ -931,6 +931,7 @@ PROMISE: ${blocks.Promise || intake.dream || "(infer)"}`;
       const prompt =
 `You are a direct-response strategist multiplying one fact into many angles, in the Anvil framework.
 OFFER: ${intake.offer}
+${awarenessLine()}
 ${fact}
 ${voiceLine()}${complianceLine()}
 

@@ -177,6 +177,32 @@ const CURIOSITY_QUADRANTS = [
   { id: "your_problem", label: "What you see differently, about the problem" },
   { id: "your_solution", label: "What you see differently, about the solution" },
 ];
+// Angle multiplication, Part 2 of Anvil_Segments_and_Angles_Spec.md. One fact
+// from a segment or persona becomes several different psychological entry
+// points, nine fixed families, each with its own named subtypes. riskySubtypes
+// are excluded outright for the heaviest compliance tier (intake.regulated),
+// per the spec's own cap: "capped for trust voices, off for the heaviest tier."
+// safeForTrust marks the families the spec calls out as the safe, strong ones
+// to prefer for a regulated or local trust-market client. Both flags are read
+// in code, never asked of the model, so which angles count as safe is a known
+// fact about the family, not a judgment call left to the generation itself.
+const ANGLE_FAMILIES = [
+  { id: "discovery", label: "Discovery and revelation", subtypes: ["New discovery", "Lost wisdom", "Missing piece", "Root cause", "Paradox"] },
+  { id: "temporal", label: "Temporal and urgency", subtypes: ["Breaking news", "Trend", "Future warning", "Countdown", "Before and after"], riskySubtypes: ["Breaking news", "Countdown"] },
+  { id: "authority", label: "Authority and credibility", subtypes: ["Expert", "Insider", "Crossover expert", "Unlikely teacher", "Regional"] },
+  { id: "conflict", label: "Conflict and controversy", subtypes: ["Contrarian", "Myth-busting", "David versus Goliath", "Vindication"] },
+  { id: "narrative", label: "Narrative and story", subtypes: ["Case study", "Journey", "Cautionary tale", "Redemption arc", "Documentary"], safeForTrust: true },
+  { id: "analytical", label: "Analytical and logic", subtypes: ["Comparison", "Test", "Reverse engineering", "Elimination", "Diagnostic"], safeForTrust: true },
+  { id: "social", label: "Social and identity", subtypes: ["Tribal", "Class secret", "Generational", "Movement"] },
+  { id: "emotional", label: "Emotional and psychological", subtypes: ["Confession", "Permission", "Protective", "Pattern interrupt"] },
+  { id: "reframe", label: "Problem reframe", subtypes: ["Wrong question", "Almost worked", "What went wrong", "Which type are you"], safeForTrust: true },
+];
+function angleFamiliesForIntake(regulated) {
+  return ANGLE_FAMILIES.map((f) => ({
+    ...f,
+    subtypes: regulated && f.riskySubtypes ? f.subtypes.filter((s) => !f.riskySubtypes.includes(s)) : f.subtypes,
+  }));
+}
 // Pain Chain and Promise Ladder share the same 4-rung shape: general, specific,
 // how it shows up in life, and the deep emotion underneath. Pain and Promise are
 // meant to mirror each other rung for rung.
@@ -547,6 +573,7 @@ export default function App() {
   const [constraintDissolve, setConstraintDissolve] = useState([]);
   const [curiosityAngles, setCuriosityAngles] = useState([]);
   const [characterizations, setCharacterizations] = useState([]);
+  const [angleMultiplication, setAngleMultiplication] = useState([]);
   const [intuitionPumps, setIntuitionPumps] = useState([]);
   const [evocativeNames, setEvocativeNames] = useState([]);
   const [antiConstraintNames, setAntiConstraintNames] = useState([]);
@@ -883,6 +910,42 @@ Return ONLY valid JSON, no fences: escape any quote marks inside a string as \",
       setCharacterizations(Array.isArray(j.characterizations) ? j.characterizations.slice(0, 2) : []);
       markDone("curiosity");
     } catch (e) { setError("Could not build curiosity angles. " + ((e && e.message) || "Unknown error") + ". Try again, or fill the Curiosity block by hand."); }
+    finally { setBusy(""); }
+  }
+
+  async function buildAngleMultiplication() {
+    setError("");
+    const hasMaterial = activePersona || (avatar && (avatar.pains || avatar.dreamOutcomes)) || blocks.Pain.trim() || blocks.Promise.trim() || intake.struggle.trim() || intake.dream.trim();
+    if (!hasMaterial) { setError("Pick a persona from the segment builder, or fill in Pain or Promise, or build the avatar first. Angle multiplication needs one real fact to multiply."); return; }
+    setBusy("angles");
+    try {
+      const fact = activePersona
+        ? `THE FACT TO MULTIPLY, ONE PERSONA'S SITUATION: ${activePersona.name}. ${activePersona.description} Wants: ${activePersona.outcomeName}.`
+        : avatar
+          ? `PAINS: ${JSON.stringify(avatar.pains || [])}
+DREAM OUTCOMES: ${JSON.stringify(avatar.dreamOutcomes || [])}`
+          : `PAIN: ${blocks.Pain || intake.struggle || "(infer)"}
+PROMISE: ${blocks.Promise || intake.dream || "(infer)"}`;
+      const families = angleFamiliesForIntake(intake.regulated);
+      const familyList = families.map((f) => `${f.id}: ${f.label}. Subtypes: ${f.subtypes.join(", ")}.`).join("\n");
+      const prompt =
+`You are a direct-response strategist multiplying one fact into many angles, in the Anvil framework.
+OFFER: ${intake.offer}
+${fact}
+${voiceLine()}${complianceLine()}
+
+One fact becomes many hooks. You do not change minds with new information, you change how people attend to information they already have. For each of these 9 fixed angle families, using the id exactly as written, each family exactly once, no repeats and none skipped, pick the single best-fitting subtype from that family's own list below and write one hook, one to two sentences, grounded only in the fact given above, never inventing a new fact, statistic, or persona detail to make a family fit:
+${familyList}
+
+Never invent a statistic, a study, a cited research finding, or a named authority not given in the material above. Under Authority and credibility, only claim expertise or insider standing the material actually supports, never fabricate a credential. Under Conflict and controversy, do not frame this as a hidden conspiracy or a suppressed truth, contrarian and myth-busting angles challenge a common assumption, they do not imply a cover-up. ${intake.regulated ? "This is a regulated vertical, breaking-news and countdown urgency framing are excluded from the list above entirely, do not reach for that framing under any other family either." : "Keep any breaking-news or countdown framing grounded in something actually true and current, never invented timing pressure."} Find the belief or fact already in the material, do not install one the reader does not already hold.
+
+Return ONLY valid JSON, no fences: escape any quote marks inside a string as \", and never put a literal line break inside a string value.
+{"angles":[{"familyId":"one of the 9 ids above","subtype":"the subtype chosen","angle":"the hook, one to two sentences"}]}`;
+      const out = await callClaude(prompt, 1800);
+      const j = parseJSON(out);
+      setAngleMultiplication(Array.isArray(j.angles) ? j.angles.slice(0, 9) : []);
+      markDone("angles");
+    } catch (e) { setError("Could not multiply angles. " + ((e && e.message) || "Unknown error") + ". Try again, or fill the Curiosity block by hand."); }
     finally { setBusy(""); }
   }
 
@@ -1836,6 +1899,28 @@ Return ONLY JSON, no fences:
                   ))}
                 </div>
               )}
+            </section>
+
+            <section style={card}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
+                <h2 style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>Angle multiplication</h2>
+                <button style={btnState("angles", { ...btnGhost, padding: "6px 10px", fontSize: 12 })} onClick={buildAngleMultiplication} disabled={busy === "angles"}>{busy === "angles" ? <><Spinner /> Multiplying</> : "Multiply into angles"}</button>
+              </div>
+              <p style={{ margin: "0 0 12px", fontSize: 12.5, color: "#6b6b70" }}>One fact, wrapped in different angles, is many psychological entry points. {activePersona ? `Reading from ${activePersona.name}.` : "Pick a persona above to target one specific buyer, or this reads from the avatar or Pain and Promise blocks instead."} Anvil widens the field, you pick what lands, nothing here is ranked or declared a winner.</p>
+              {angleMultiplication.length > 0 && angleMultiplication.map((a, i) => {
+                const fam = ANGLE_FAMILIES.find((f) => f.id === a.familyId);
+                return (
+                  <div key={i} style={{ borderTop: i > 0 ? "1px solid #f0f0f2" : "none", paddingTop: i > 0 ? 10 : 0, marginTop: i > 0 ? 10 : 0 }}>
+                    <div style={{ marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}>
+                      <Chip text={fam ? fam.label : a.familyId} color={BLOCKS.Curiosity.color} />
+                      <span style={{ fontSize: 11.5, color: "#9a9aa0" }}>{a.subtype}</span>
+                      {fam && fam.safeForTrust && <span style={{ fontSize: 10.5, fontWeight: 700, color: "#1B7A43", border: "1px solid #1B7A43", borderRadius: 6, padding: "1px 6px" }}>safe for trust markets</span>}
+                    </div>
+                    <div style={{ fontSize: 13, color: "#1f1f22", marginBottom: 6 }}>{a.angle}</div>
+                    <button style={{ ...btnGhost, padding: "5px 10px", fontSize: 12 }} onClick={() => setBlock("Curiosity", a.angle)}>Use in Curiosity block</button>
+                  </div>
+                );
+              })}
             </section>
 
             <section style={card}>
